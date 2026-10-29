@@ -1,0 +1,41 @@
+{
+  "name": "kura-convex",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:self-hosted": "node scripts/dev.mjs self-hosted",
+    "convex:dev": "node scripts/convex.mjs dev",
+    "convex:dev:once": "node scripts/convex.mjs dev --once",
+    "convex:dashboard": "node scripts/convex.mjs dashboard",
+    "self-hosted:up": "docker compose -f docker/docker-compose.yml up -d --wait",
+    "self-hosted:down": "docker compose -f docker/docker-compose.yml stop",
+    "self-hosted:env": "node scripts/self-hosted-env.mjs",
+    "self-hosted:deploy": "node scripts/convex.mjs deploy",
+    "build": "tsc -b && vite build",
+    "build:self-hosted": "tsc -b && vite build --mode selfhosted",
+    "typecheck": "tsc -b --pretty false && tsc -p convex --noEmit --pretty false",
+    "lint": "oxlint",
+    "check": "pnpm lint && pnpm typecheck && pnpm build",
+    "preview": "vite preview --host 127.0.0.1 --port 5175"
+  },
+  "dependencies": {
+    "convex": "^1.48.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "oxlint": "^1.89.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.5"
+  }
+}
