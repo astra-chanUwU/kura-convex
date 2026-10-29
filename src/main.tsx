@@ -1,24 +1,26 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { ConvexProvider, ConvexReactClient } from 'convex/react'
-import App from './App.tsx'
-import './index.css'
+import { ConvexBetterAuthProvider, type AuthClient } from "@convex-dev/better-auth/react";
+import { ConvexReactClient } from "convex/react";
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import App from "./App.tsx";
+import { authClient } from "./lib/auth-client.ts";
+import "@fontsource-variable/geist";
+import "./index.css";
 
-const root = document.getElementById('root')
-if (!root) {
-  throw new Error('Root element #root is missing.')
-}
+const root = document.getElementById("root");
+if (!root) throw new Error("Root element #root is missing.");
 
-const url = import.meta.env.VITE_CONVEX_URL
+const url = import.meta.env.VITE_CONVEX_URL ?? "";
+const convex = url ? new ConvexReactClient(url) : null;
 
 createRoot(root).render(
   <StrictMode>
-    {url ? (
-      <ConvexProvider client={new ConvexReactClient(url)}>
+    {convex ? (
+      <ConvexBetterAuthProvider client={convex} authClient={authClient as unknown as AuthClient}>
         <App url={url} />
-      </ConvexProvider>
+      </ConvexBetterAuthProvider>
     ) : (
       <App url="" />
     )}
   </StrictMode>,
-)
+);

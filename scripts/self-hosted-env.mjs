@@ -35,6 +35,9 @@ writeFileSync(
     `CONVEX_SELF_HOSTED_URL='${backendUrl}'`,
     `CONVEX_SELF_HOSTED_ADMIN_KEY='${key}'`,
     `VITE_CONVEX_URL='${backendUrl}'`,
+    `VITE_CONVEX_SITE_URL='http://127.0.0.1:3211'`,
+    `VITE_SITE_URL='http://127.0.0.1:5175'`,
+    `VITE_S3_PUBLIC_URL='http://127.0.0.1:9000/kura-images'`,
     "",
   ].join("\n"),
 );

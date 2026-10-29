@@ -17,7 +17,8 @@ services:
       - data:/convex/data
     environment:
       - V8_ACTION_USER_TIMEOUT_SECS
-      - NODE_ACTION_USER_TIMEOUT_SECS
+      - NODE_ACTION_USER_TIMEOUT_SECS=${NODE_ACTION_USER_TIMEOUT_SECS:-60}
+      - ISOLATE_ANALYZE_USER_TIMEOUT_SECONDS=${ISOLATE_ANALYZE_USER_TIMEOUT_SECONDS:-30}
       - APPLICATION_MAX_CONCURRENT_MUTATIONS=${APPLICATION_MAX_CONCURRENT_MUTATIONS:-16}
       - APPLICATION_MAX_CONCURRENT_NODE_ACTIONS=${APPLICATION_MAX_CONCURRENT_NODE_ACTIONS:-16}
       - APPLICATION_MAX_CONCURRENT_QUERIES=${APPLICATION_MAX_CONCURRENT_QUERIES:-16}
@@ -70,5 +71,21 @@ services:
       backend:
         condition: service_healthy
 
+  minio:
+    profiles: ["s3"]
+    image: cgr.dev/chainguard/minio:latest
+    command: server /data --console-address ":9001"
+    user: "0:0"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: kura
+      MINIO_ROOT_PASSWORD: kura-secret-key
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+    volumes:
+      - minio:/data
+
 volumes:
   data:
+  minio:

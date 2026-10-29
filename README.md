@@ -9,7 +9,7 @@ A local remake of [Kura](https://github.com/astra-chanUwU/kura-v4). The backend 
 | HTTP actions | http://127.0.0.1:3211 |
 | Dashboard | http://127.0.0.1:6791 |
 
-The app is a status page that calls `site.status`. The image board is not ported yet.
+The app is an image board. Posts and preferences live in Convex. Picture files live in MinIO. Accounts use Better Auth. A Safebooru seed can fill the board with general-rated pictures tagged yuri, cute, anime girl (`1girl`), and cyberpunk.
 
 ## Setup
 

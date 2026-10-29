@@ -12,6 +12,7 @@
     "module": "ESNext",
     "isolatedModules": true,
     "noEmit": true,
+    "types": ["node"],
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
