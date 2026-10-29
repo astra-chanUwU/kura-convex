@@ -12,7 +12,6 @@ dist
 dist-ssr
 *.local
 .convex
-docker/.env
 
 # Editor directories and files
 .vscode/*

@@ -1,18 +1,13 @@
 # Kura Convex
 
-A local remake of [Kura](https://github.com/astra-chanUwU/kura-v4), starting from a Convex backend you run on this machine. Nothing here talks to Convex Cloud.
+A local remake of [Kura](https://github.com/astra-chanUwU/kura-v4). The backend is [self-hosted Convex](https://docs.convex.dev/self-hosting), running on this machine with the official Docker Compose file. Nothing here talks to Convex Cloud.
 
-Two backends share the same `convex/` functions and stay on different ports, so both can run at once:
-
-| | Local dev | Self-hosted |
-| --- | --- | --- |
-| Command | `pnpm dev` | `pnpm dev:self-hosted` |
-| Backend | Convex CLI, anonymous | Docker Compose |
-| State | `.convex/` (gone with the dev process) | Docker volume `kura-convex_data` |
-| Backend URL | http://127.0.0.1:3210 | http://127.0.0.1:3220 |
-| HTTP actions | http://127.0.0.1:3211 | http://127.0.0.1:3221 |
-| App | http://127.0.0.1:5175 | http://127.0.0.1:5176 |
-| Dashboard | `pnpm convex:dashboard` while `pnpm dev` is running | http://127.0.0.1:6791 |
+| | |
+| --- | --- |
+| App | http://127.0.0.1:5175 |
+| Backend | http://127.0.0.1:3210 |
+| HTTP actions | http://127.0.0.1:3211 |
+| Dashboard | http://127.0.0.1:6791 |
 
 The app is a status page that calls `site.status`. The image board is not ported yet.
 
@@ -22,38 +17,33 @@ Install Node 24 or newer, pnpm 12.15.0, and Docker.
 
 ```sh
 pnpm install
+docker compose up -d
+docker compose exec backend ./generate_admin_key.sh
 ```
 
-### Local dev
+Put the printed admin key in `.env.local`, using `.env.example` as the template:
+
+```sh
+CONVEX_SELF_HOSTED_URL='http://127.0.0.1:3210'
+CONVEX_SELF_HOSTED_ADMIN_KEY='<your admin key>'
+VITE_CONVEX_URL='http://127.0.0.1:3210'
+```
+
+`node scripts/self-hosted-env.mjs` runs those same steps and writes `.env.local` for you. Do not commit that file.
+
+Paste the admin key into the dashboard at http://127.0.0.1:6791.
+
+## Develop
+
+`pnpm dev` runs `convex dev` against the URL in `.env.local` and starts Vite. Leave it running while you edit `convex/`.
 
 ```sh
 pnpm dev
+pnpm exec convex deploy   # push once, without Vite
+docker compose stop       # stop the backend and dashboard, keep the volume
 ```
 
-The first run downloads the open-source Convex backend and writes `.env.local`. That file is gitignored. Leave the command running; the local backend stops when it exits.
-
-### Self-hosted
-
-```sh
-pnpm dev:self-hosted
-```
-
-That starts the backend and dashboard containers, generates `.env.selfhosted.local` (gitignored) the first time, pushes the Convex functions, and starts Vite. The admin key in that file signs the CLI in to your backend. Paste it into the dashboard at http://127.0.0.1:6791. Do not commit it.
-
-```sh
-pnpm self-hosted:up      # containers only
-pnpm self-hosted:down    # stop containers, keep the volume
-pnpm self-hosted:deploy  # push functions once, without Vite
-pnpm self-hosted:env     # rewrite the admin key file
-```
-
-`docker/.env.example` lists the port overrides. Copy it to `docker/.env` if you need to change them. A copied `docker/.env` is gitignored so an `INSTANCE_SECRET` can live there later.
-
-To build the frontend already pointed at the self-hosted backend:
-
-```sh
-pnpm build:self-hosted
-```
+When this moves to a server, run the same Compose file there and point `CONVEX_SELF_HOSTED_URL` at that host.
 
 ## Check
 
@@ -61,6 +51,6 @@ pnpm build:self-hosted
 pnpm check
 ```
 
-That runs oxlint, TypeScript, and the Vite build. It does not need either backend running.
+That runs oxlint, TypeScript, and the Vite build. It does not need the backend running.
 
-Ports sit next to Kura V4 (`5174`, `8094`, `56432`) without taking them.
+The app port sits next to Kura V4 (`5174`) without taking it.

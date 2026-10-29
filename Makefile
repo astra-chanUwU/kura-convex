@@ -1,7 +1,7 @@
-.PHONY: help setup dev dev-self-hosted self-hosted-up self-hosted-down self-hosted-deploy check
+.PHONY: help setup dev up down deploy check
 
 help:
-	@echo "setup | dev | dev-self-hosted | self-hosted-up | self-hosted-down | self-hosted-deploy | check"
+	@echo "setup | dev | up | down | deploy | check"
 
 setup:
 	pnpm install --frozen-lockfile
@@ -9,17 +9,14 @@ setup:
 dev:
 	pnpm dev
 
-dev-self-hosted:
-	pnpm dev:self-hosted
+up:
+	docker compose up -d
 
-self-hosted-up:
-	pnpm self-hosted:up
+down:
+	docker compose stop
 
-self-hosted-down:
-	pnpm self-hosted:down
-
-self-hosted-deploy:
-	pnpm self-hosted:deploy
+deploy:
+	pnpm exec convex deploy
 
 check:
 	pnpm check

@@ -1,8 +1,19 @@
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { localPortArgs } from "./convex-ports.mjs";
 
-const selfHosted = process.argv[2] === "self-hosted";
+const envPath = ".env.local";
+const envText = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
+
+if (!envText.includes("CONVEX_SELF_HOSTED_URL=")) {
+  console.error(`Missing CONVEX_SELF_HOSTED_URL in ${envPath}.`);
+  console.error("Start the backend, then write the admin key into .env.local:");
+  console.error("  docker compose up -d");
+  console.error("  docker compose exec backend ./generate_admin_key.sh");
+  console.error("Or run: node scripts/self-hosted-env.mjs");
+  process.exit(1);
+}
+
 const cli = fileURLToPath(
   new URL("../node_modules/convex/bin/main.js", import.meta.url),
 );
@@ -13,60 +24,28 @@ const viteBin = fileURLToPath(
 const children = [];
 let stopping = false;
 
-if (selfHosted) {
-  const prepare = spawn(process.execPath, ["scripts/self-hosted-env.mjs"], {
-    stdio: "inherit",
-    env: process.env,
-  });
-  children.push(prepare);
-  prepare.on("exit", (code) => {
-    if (stopping) return;
-    if (code) process.exit(code ?? 1);
-    start(
-      ["dev", "--env-file", ".env.selfhosted.local"],
-      ["--host", "127.0.0.1", "--port", "5176", "--mode", "selfhosted"],
-    );
-  });
-} else {
-  const once = run(process.execPath, [
-    cli,
-    "dev",
-    "--once",
-    ...localPortArgs(cli),
-  ]);
-  once.on("exit", (code) => {
-    if (stopping) return;
-    if (code) process.exit(code);
-    start(["dev", ...localPortArgs(cli)], ["--host", "127.0.0.1", "--port", "5175"]);
-  });
-}
+const dev = run(process.execPath, [cli, "dev"]);
+const vite = run(process.execPath, [
+  viteBin,
+  "--host",
+  "127.0.0.1",
+  "--port",
+  "5175",
+]);
 
-function start(convexArgs, viteArgs) {
-  const dev = run(process.execPath, [cli, ...convexArgs]);
-  const vite = run(process.execPath, [viteBin, ...viteArgs]);
-  for (const child of [dev, vite]) {
-    child.on("exit", (code) => {
-      if (!stopping) stop(code ?? 0);
-    });
-  }
+for (const child of [dev, vite]) {
+  child.on("exit", (code) => {
+    if (!stopping) stop(code ?? 0);
+  });
 }
 
 function run(command, args) {
   const child = spawn(command, args, {
     stdio: "inherit",
-    env: childEnv(),
     windowsHide: true,
   });
   children.push(child);
   return child;
-}
-
-function childEnv() {
-  const env = { ...process.env };
-  if (selfHosted) return env;
-  env.CONVEX_AGENT_MODE = "anonymous";
-  delete env.CONVEX_DEPLOY_KEY;
-  return env;
 }
 
 function stop(code) {

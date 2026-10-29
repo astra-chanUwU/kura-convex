@@ -1,20 +1,18 @@
-# Self-hosted Convex for Kura Convex.
-# Based on https://github.com/get-convex/convex-backend/blob/main/self-hosted/docker/docker-compose.yml
-#
-# Host ports are shifted off 3210/3211 so `pnpm dev` can run the local Convex
-# backend at the same time. Inside the containers the backend still listens
-# on 3210 and 3211.
+# Official self-hosted Convex Compose file:
+# https://github.com/get-convex/convex-backend/blob/main/self-hosted/docker/docker-compose.yml
+# `name` keeps this project's Docker volume stable when Compose is run from this directory.
 
 name: kura-convex
 
 services:
   backend:
-    image: ghcr.io/convex/convex-backend:${REV:-latest}
+    # Change this to :${REV} if you want to pin to a specific version
+    image: ghcr.io/convex/convex-backend:latest
     stop_grace_period: 10s
     stop_signal: SIGINT
     ports:
-      - "${PORT:-3220}:3210"
-      - "${SITE_PROXY_PORT:-3221}:3211"
+      - "${PORT:-3210}:3210"
+      - "${SITE_PROXY_PORT:-3211}:3211"
     volumes:
       - data:/convex/data
     environment:
@@ -31,13 +29,13 @@ services:
       - AWS_S3_FORCE_PATH_STYLE
       - AWS_SECRET_ACCESS_KEY
       - AWS_SESSION_TOKEN
-      - CONVEX_CLOUD_ORIGIN=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:${PORT:-3220}}
+      - CONVEX_CLOUD_ORIGIN=${CONVEX_CLOUD_ORIGIN:-http://127.0.0.1:${PORT:-3210}}
       - CONVEX_RELEASE_VERSION_DEV
-      - CONVEX_SITE_ORIGIN=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:${SITE_PROXY_PORT:-3221}}
+      - CONVEX_SITE_ORIGIN=${CONVEX_SITE_ORIGIN:-http://127.0.0.1:${SITE_PROXY_PORT:-3211}}
       - DATABASE_URL
       - DISABLE_BEACON
-      - DISABLE_METRICS_ENDPOINT=${DISABLE_METRICS_ENDPOINT:-true}
-      - DOCUMENT_RETENTION_DELAY=${DOCUMENT_RETENTION_DELAY:-172800}
+      - DISABLE_METRICS_ENDPOINT=${DISABLE_METRICS_ENDPOINT:-true} # Enable if you want prometheus compatible /metrics endpoint
+      - DOCUMENT_RETENTION_DELAY=${DOCUMENT_RETENTION_DELAY:-172800} # Lower default document retention to 2 days
       - DO_NOT_REQUIRE_SSL
       - HTTP_SERVER_TIMEOUT_SECONDS
       - INSTANCE_NAME=${INSTANCE_NAME:-kura-convex}
@@ -56,18 +54,17 @@ services:
     healthcheck:
       test: curl -f http://localhost:3210/version
       interval: 5s
-      timeout: 5s
-      retries: 24
-      start_period: 20s
+      start_period: 10s
 
   dashboard:
-    image: ghcr.io/convex/convex-dashboard:${REV:-latest}
+    # Change this to :${REV} if you want to pin to a specific version
+    image: ghcr.io/convex/convex-dashboard:latest
     stop_grace_period: 10s
     stop_signal: SIGINT
     ports:
       - "${DASHBOARD_PORT:-6791}:6791"
     environment:
-      - NEXT_PUBLIC_DEPLOYMENT_URL=${NEXT_PUBLIC_DEPLOYMENT_URL:-http://127.0.0.1:${PORT:-3220}}
+      - NEXT_PUBLIC_DEPLOYMENT_URL=${NEXT_PUBLIC_DEPLOYMENT_URL:-http://127.0.0.1:${PORT:-3210}}
       - NEXT_PUBLIC_LOAD_MONACO_INTERNALLY
     depends_on:
       backend:

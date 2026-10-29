@@ -1,9 +1,10 @@
 # Kura Convex
 
-- React + Vite + TypeScript, with Convex as the backend. There is no Go server and no Convex Cloud deployment.
-- `pnpm dev` runs the local Convex backend (anonymous, state in `.convex/`) and Vite. `pnpm dev:self-hosted` runs against the Docker backend in `docker/docker-compose.yml`.
-- Keep host ports split: local backend `3210` / site `3211` / Vite `5175`; self-hosted backend `3220` / site `3221` / dashboard `6791` / Vite `5176`.
+- React + Vite + TypeScript, with one self-hosted Convex backend. There is no Go server and no Convex Cloud deployment.
+- Follow the self-hosting guide: `docker compose up`, admin key in `.env.local` as `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY`, then `convex dev`.
+- `pnpm dev` runs `convex dev` and Vite. `convex dev` reads `.env.local` and pushes `convex/` to the Docker backend.
+- Ports: backend `3210`, HTTP actions `3211`, dashboard `6791`, Vite `5175`.
 - Convex functions live in `convex/`. The React app lives in `src/`. Render components call Convex hooks directly. Use CSS Modules and the semantic variables in `src/index.css`.
-- Do not commit `.env.local`, `.env.selfhosted.local`, `docker/.env`, `.convex/`, or admin keys. `pnpm self-hosted:env` generates the self-hosted admin key.
+- Do not commit `.env.local` or admin keys.
 - Public reads must not imply anonymous writes once accounts exist. This scaffold has a single public status query.
 - pnpm only. Do not point the CLI at a Convex Cloud project.
