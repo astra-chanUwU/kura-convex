@@ -1,6 +1,7 @@
 {
   "name": "kura-convex",
   "private": true,
+  "packageManager": "pnpm@12.15.0",
   "version": "0.0.0",
   "type": "module",
   "engines": {
@@ -34,7 +35,7 @@
     "clsx": "^2.1.1",
     "convex": "^1.48.0",
     "hack-font": "^3.3.0",
-    "lucide-react": "^1.64.0",
+    "lucide-react": "^1.63.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "tailwind-merge": "^3.7.0",
