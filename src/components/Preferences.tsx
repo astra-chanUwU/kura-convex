@@ -1,9 +1,10 @@
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
+import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { ThemeSwitch } from "@/components/ThemeSwitch";
+import { authClient } from "@/lib/auth-client";
 
 export function Preferences() {
   const prefs = useQuery(api.preferences.get);
@@ -12,6 +13,8 @@ export function Preferences() {
   const [bio, setBio] = useState("");
   const [include, setInclude] = useState("");
   const [exclude, setExclude] = useState("");
+  const [location, setLocation] = useState("");
+  const [website, setWebsite] = useState("");
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -20,32 +23,41 @@ export function Preferences() {
     setBio(prefs.bio);
     setInclude(prefs.includeTags.join(" "));
     setExclude(prefs.excludeTags.join(" "));
+    setLocation(prefs.location);
+    setWebsite(prefs.website);
   }, [prefs]);
 
-  if (!prefs) return <p className="p-8 text-muted-foreground">Loading preferences…</p>;
+  if (!prefs) return <p className="text-sm text-muted-foreground">Loading preferences…</p>;
   if (!prefs.signedIn) {
     return (
-      <div className="grid min-h-full place-items-center">
-        <a href="#/auth" className="rounded-lg bg-primary px-4 py-2 text-primary-foreground">
-          Sign in to edit preferences
+      <section className="grid max-w-md gap-3">
+        <h1 className="m-0 text-2xl font-semibold">Preferences</h1>
+        <p className="m-0 text-sm text-muted-foreground">Sign in to edit the filters this board reads.</p>
+        <a
+          href="#/auth"
+          className="inline-flex h-9 w-fit items-center rounded-md border border-border-strong bg-surface-soft px-3.5 text-sm text-foreground no-underline hover:bg-selection"
+        >
+          Sign in
         </a>
-      </div>
+      </section>
     );
   }
 
   return (
-    <div className="mx-auto max-w-xl px-4 pt-16 pb-10">
-      <h1 className="text-3xl font-semibold">Profile preferences</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Saved on your account. The board reads these filters live.</p>
+    <section className="grid max-w-[44rem] gap-4">
+      <h1 className="m-0 text-2xl font-semibold">Preferences</h1>
+      <p className="m-0 text-sm text-muted-foreground">
+        Saved on your account. Default tags fill an empty board, and My defaults on the board jumps back to them.
+      </p>
       <form
-        className="mt-6 rounded-2xl border border-border bg-card p-6"
+        className="grid max-w-[26rem] gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           void save({
             displayName,
             bio,
-            location: prefs.location,
-            website: prefs.website,
+            location,
+            website,
             theme: prefs.theme,
             showSensitive: prefs.showSensitive,
             includeTags: include.split(/\s+/).filter(Boolean),
@@ -53,14 +65,16 @@ export function Preferences() {
           }).then(() => setNotice("Saved."));
         }}
       >
-        <Label htmlFor="display-name">Display name</Label>
-        <Input id="display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} className="mt-1" />
-        <Label htmlFor="bio" className="mt-4 block">
-          Bio
-        </Label>
-        <Textarea id="bio" value={bio} onChange={(event) => setBio(event.target.value)} className="mt-1" />
-        <div className="mt-4 flex items-center justify-between">
-          <span className="text-sm">Theme</span>
+        <div className="grid gap-1.5">
+          <Label htmlFor="display-name">Display name</Label>
+          <Input id="display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="bio">Bio</Label>
+          <Textarea id="bio" value={bio} onChange={(event) => setBio(event.target.value)} />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm text-muted-foreground">Theme</span>
           <ThemeSwitch
             value={prefs.theme}
             onChange={(theme) => {
@@ -77,19 +91,50 @@ export function Preferences() {
             }}
           />
         </div>
-        <Label htmlFor="include" className="mt-4 block">
-          Require tags
-        </Label>
-        <Input id="include" value={include} onChange={(event) => setInclude(event.target.value)} placeholder="yuri cyberpunk" className="mt-1" />
-        <Label htmlFor="exclude" className="mt-4 block">
-          Exclude tags
-        </Label>
-        <Input id="exclude" value={exclude} onChange={(event) => setExclude(event.target.value)} className="mt-1" />
-        <Button type="submit" className="mt-5">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="location">Location</Label>
+            <Input id="location" value={location} onChange={(event) => setLocation(event.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="website">Website</Label>
+            <Input
+              id="website"
+              value={website}
+              onChange={(event) => setWebsite(event.target.value)}
+              placeholder="https://"
+            />
+          </div>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="include">Default tags</Label>
+          <Input
+            id="include"
+            value={include}
+            onChange={(event) => setInclude(event.target.value)}
+            placeholder="yuri cyberpunk"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="exclude">Default exclusions</Label>
+          <Input id="exclude" value={exclude} onChange={(event) => setExclude(event.target.value)} />
+        </div>
+        <Button type="submit" className="w-fit">
           Save preferences
         </Button>
-        {notice && <p className="mt-3 text-sm text-muted-foreground">{notice}</p>}
+        {notice && <p className="m-0 text-sm text-accent-soft">{notice}</p>}
       </form>
-    </div>
+      <button
+        type="button"
+        className="w-fit cursor-pointer border-0 bg-transparent p-0 text-sm text-danger"
+        onClick={() => {
+          void authClient.signOut().then(() => {
+            window.location.hash = "#/";
+          });
+        }}
+      >
+        Sign out
+      </button>
+    </section>
   );
 }

@@ -1,13 +1,13 @@
 import { useQuery } from "convex/react";
 import { useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
-import { authClient } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { authClient } from "@/lib/auth-client";
+import { cn } from "@/lib/utils";
 
-export function AuthCard() {
+export function AuthCard({ mode }: { mode: "sign-in" | "sign-up" }) {
   const user = useQuery(api.auth.getCurrentUser);
-  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,21 +31,45 @@ export function AuthCard() {
   }
 
   return (
-    <div className="grid min-h-full place-items-center px-4 py-16">
-      <form onSubmit={(event) => void submit(event)} className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-xl">
-        <h1 className="text-center text-2xl font-semibold">
-          {mode === "sign-in" ? "Sign in to Kura" : "Create your account"}
-        </h1>
-        <p className="mt-2 text-center text-sm text-muted-foreground">
-          {user ? `Signed in as ${user.email ?? user.name}` : "Email and password, through Better Auth."}
-        </p>
+    <section className="grid max-w-[26rem] gap-4" aria-labelledby="auth-title">
+      <h1 id="auth-title" className="m-0 text-2xl font-semibold">
+        {mode === "sign-in" ? "Welcome back" : "Create your account"}
+      </h1>
+      <p className="m-0 text-sm text-muted-foreground">
+          {user ? `Signed in as ${user.email ?? user.name}` : "Email and a password. The board stays public."}
+      </p>
+      <div className="flex gap-2" role="tablist" aria-label="Account action">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "sign-in"}
+          className={tabClass(mode === "sign-in")}
+          onClick={() => {
+            window.location.hash = "#/auth";
+          }}
+        >
+          Sign in
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === "sign-up"}
+          className={tabClass(mode === "sign-up")}
+          onClick={() => {
+            window.location.hash = "#/auth?mode=sign-up";
+          }}
+        >
+          Create account
+        </button>
+      </div>
+      <form onSubmit={(event) => void submit(event)} className="grid gap-4">
         {mode === "sign-up" && (
-          <div className="mt-5">
+          <div className="grid gap-1.5">
             <Label htmlFor="name">Name</Label>
-            <Input id="name" value={name} onChange={(event) => setName(event.target.value)} required className="mt-1" />
+            <Input id="name" value={name} onChange={(event) => setName(event.target.value)} required />
           </div>
         )}
-        <div className="mt-4">
+        <div className="grid gap-1.5">
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
@@ -54,10 +78,9 @@ export function AuthCard() {
             onChange={(event) => setEmail(event.target.value)}
             required
             placeholder="you@example.com"
-            className="mt-1"
           />
         </div>
-        <div className="mt-4">
+        <div className="grid gap-1.5">
           <Label htmlFor="password">Password</Label>
           <Input
             id="password"
@@ -66,24 +89,20 @@ export function AuthCard() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
-            className="mt-1"
           />
         </div>
-        {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
-        <Button type="submit" disabled={pending} className="mt-5 h-10 w-full">
+        {error && <p className="m-0 text-sm text-danger">{error}</p>}
+        <Button type="submit" disabled={pending} className="w-fit">
           {pending ? "Working…" : mode === "sign-in" ? "Continue with email" : "Create account"}
         </Button>
-        <p className="mt-4 text-center text-sm text-muted-foreground">
-          {mode === "sign-in" ? "Need an account?" : "Already have one?"}{" "}
-          <button
-            type="button"
-            className="text-[#e48ab8]"
-            onClick={() => setMode(mode === "sign-in" ? "sign-up" : "sign-in")}
-          >
-            {mode === "sign-in" ? "Sign up" : "Sign in"}
-          </button>
-        </p>
       </form>
-    </div>
+    </section>
+  );
+}
+
+function tabClass(active: boolean) {
+  return cn(
+    "cursor-pointer rounded-full border bg-surface px-3.5 py-2 text-sm",
+    active ? "border-accent text-foreground" : "border-border-strong text-muted-foreground hover:text-foreground",
   );
 }

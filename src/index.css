@@ -1,10 +1,12 @@
 @import "tailwindcss";
 
+/* Kura v4 tokens. Dark is Kura Dark. Light is the Danbooru theme. */
 @theme inline {
-  --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Atkinson Hyperlegible", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
+  --color-surface-soft: var(--surface-soft);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -13,50 +15,84 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent-soft: var(--accent-soft);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-danger: var(--danger);
+  --color-selection: var(--selection);
+  --radius-sm: 0.35rem;
+  --radius-md: 0.4rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
 }
 
 :root {
   color-scheme: dark;
-  --radius: 0.5rem;
-  --background: #21141e;
-  --foreground: #f9f8fb;
-  --surface: #1f1a24;
-  --card: #2a2229;
-  --card-foreground: #f9f8fb;
-  --popover: #100a0e;
-  --popover-foreground: #f8f1f5;
-  --primary: color-mix(in oklab, oklch(0.62 0.2 350) 46%, #24141e);
-  --primary-foreground: #fbd0e8;
-  --muted: #2a2228;
-  --muted-foreground: #d4c7e1;
-  --border: #322028;
-  --input: #120c10;
-  --ring: #c46b96;
+  --header-h: 4.25rem;
+  --page-x: clamp(1rem, 4vw, 3.5rem);
+  --background: #100f15;
+  --foreground: #f2eff7;
+  --surface: #191720;
+  --surface-soft: #211e2b;
+  --card: #191720;
+  --card-foreground: #f2eff7;
+  --popover: #191720;
+  --popover-foreground: #f2eff7;
+  --primary: #b49afa;
+  --primary-foreground: #17131f;
+  --accent: #b49afa;
+  --accent-foreground: #17131f;
+  --accent-soft: #f0a7d2;
+  --muted: #211e2b;
+  --muted-foreground: #a19bab;
+  --border: #2d2937;
+  --border-strong: #484153;
+  --input: #191720;
+  --ring: #b49afa;
+  --danger: #ff9a9a;
+  --selection: #493d62;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --background: #f4eef2;
-  --foreground: #1c1218;
-  --surface: #fbf7f9;
+  --background: #f5f7fa;
+  --foreground: #222222;
+  --surface: #ffffff;
+  --surface-soft: #eef4fb;
   --card: #ffffff;
-  --card-foreground: #1c1218;
+  --card-foreground: #222222;
   --popover: #ffffff;
-  --popover-foreground: #1c1218;
-  --primary: #7a3060;
-  --primary-foreground: #fff7fb;
-  --muted: #f0e4ea;
-  --muted-foreground: #6e5964;
-  --border: #e4d5dc;
+  --popover-foreground: #222222;
+  --primary: #0075f8;
+  --primary-foreground: #ffffff;
+  --accent: #0075f8;
+  --accent-foreground: #ffffff;
+  --accent-soft: #d6336c;
+  --muted: #eef4fb;
+  --muted-foreground: #6c757d;
+  --border: #d9e2ec;
+  --border-strong: #a8bdd1;
   --input: #ffffff;
-  --ring: #7a3060;
+  --ring: #0075f8;
+  --danger: #c1272d;
+  --selection: #bcd8f7;
+}
+
+@media (max-width: 900px) {
+  :root {
+    --page-x: 1rem;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --header-h: 3.5rem;
+    --page-x: 0.75rem;
+  }
 }
 
 html,
@@ -67,12 +103,28 @@ body,
 
 body {
   margin: 0;
-  background-color: var(--background);
-  background-image: radial-gradient(
-    900px 520px at 0% 0%,
-    color-mix(in oklab, var(--primary) 55%, transparent),
-    transparent 62%
-  );
+  background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: var(--selection);
+  color: var(--foreground);
+}
+
+@media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 1rem;
+  }
 }

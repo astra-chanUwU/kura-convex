@@ -3,20 +3,18 @@ import type { ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium transition disabled:pointer-events-none disabled:opacity-40 outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer [&_svg]:size-4",
+  "inline-flex cursor-pointer items-center justify-center gap-2 rounded-md text-sm whitespace-nowrap transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40 [&_svg]:size-4",
   {
     variants: {
       variant: {
-        default:
-          "h-9 rounded-lg bg-primary px-4 text-primary-foreground shadow-sm hover:brightness-110",
-        pill: "h-9 rounded-full bg-foreground/10 px-5 text-foreground/90 shadow-sm hover:bg-foreground/15",
-        outline:
-          "h-8 rounded-full border border-foreground/15 bg-transparent px-3 text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
-        ghost: "h-8 rounded-md bg-transparent px-2 text-muted-foreground hover:bg-foreground/5 hover:text-foreground",
+        default: "border border-border-strong bg-surface-soft text-foreground hover:bg-selection",
+        accent: "border border-accent bg-accent font-semibold text-accent-foreground hover:brightness-110",
+        outline: "border border-border-strong bg-surface text-foreground hover:bg-surface-soft",
+        ghost: "text-muted-foreground hover:bg-surface-soft hover:text-foreground",
       },
       size: {
-        default: "",
-        icon: "size-8 p-0",
+        default: "h-9 px-3.5",
+        icon: "size-8",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

@@ -15,7 +15,7 @@ export function ThemeSwitch({
   onChange: (value: "light" | "dark" | "system") => void;
 }) {
   return (
-    <div className="flex items-center rounded-full border border-border bg-background/80 p-0.5">
+    <div className="flex items-center rounded-md border border-border-strong bg-surface p-0.5">
       {items.map((item) => {
         const Icon = item.icon;
         const selected = value === item.id;
@@ -27,8 +27,8 @@ export function ThemeSwitch({
             aria-pressed={selected}
             onClick={() => onChange(item.id)}
             className={cn(
-              "grid size-6 cursor-pointer place-items-center rounded-full",
-              selected ? "text-[#e48ab8]" : "text-foreground/70 hover:text-foreground",
+              "grid size-7 cursor-pointer place-items-center rounded-sm",
+              selected ? "bg-surface-soft text-accent" : "text-muted-foreground hover:text-foreground",
             )}
           >
             <Icon className="size-3.5" />

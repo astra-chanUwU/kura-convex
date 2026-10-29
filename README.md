@@ -35,7 +35,15 @@ Paste the admin key into the dashboard at http://127.0.0.1:6791.
 
 ## Develop
 
-`pnpm dev` runs `convex dev` against the URL in `.env.local` and starts Vite. Leave it running while you edit `convex/`.
+`pnpm dev` runs `convex dev` against the URL in `.env.local` and starts Vite. Leave it running while you edit `convex/`. Picture bytes are served by a local S3 stand-in, because the public MinIO images are no longer published. Start that before the board, then seed if the board is empty.
+
+```sh
+node scripts/ensure-env.mjs
+pnpm s3
+pnpm seed
+```
+
+`pnpm s3` stores files under `D:\kura-minio\data` and listens on port 9000. `pnpm seed` pulls 1,200 general-rated Safebooru samples and skips ids that are already stored.
 
 ```sh
 pnpm dev
