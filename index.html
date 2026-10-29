@@ -5,6 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Kura</title>
+    <script>
+      try {
+        var themes = {
+          kura: 1, safebooru: 1, rule34: 1, umineko: 1, bernkastel: 1, lambdadelta: 1,
+          beatrice: 1, erika: 1, battler: 1, virgilia: 1, catppuccin: 1, danbooru: 1,
+        };
+        var fonts = { system: 1, serif: 1, rounded: 1, mono: 1, hack: 1 };
+        var theme = localStorage.getItem("kura-theme");
+        if (theme === "light") theme = "danbooru";
+        if (theme === "dark" || theme === "system") theme = "kura";
+        if (theme && themes[theme]) document.documentElement.dataset.theme = theme;
+        var font = localStorage.getItem("kura-font");
+        if (font && fonts[font] && font !== "system") document.documentElement.dataset.font = font;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
-/* Kura v4 tokens. Dark is Kura Dark. Light is the Danbooru theme. */
+/* Kura v4 tokens. Themes redefine the semantic colors. Fonts redefine --font-body. */
 @theme inline {
-  --font-sans: "Atkinson Hyperlegible", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-sans: var(--font-body);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
@@ -30,10 +30,12 @@
   --radius-xl: 0.75rem;
 }
 
-:root {
+:root,
+:root[data-theme="kura"] {
   color-scheme: dark;
   --header-h: 4.25rem;
   --page-x: clamp(1rem, 4vw, 3.5rem);
+  --font-body: "Atkinson Hyperlegible", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
   --background: #100f15;
   --foreground: #f2eff7;
   --surface: #191720;
@@ -57,29 +59,220 @@
   --selection: #493d62;
 }
 
+:root[data-theme="safebooru"] {
+  color-scheme: light;
+  --background: #eef4fc;
+  --foreground: #17283c;
+  --surface: #ffffff;
+  --surface-soft: #dcebfb;
+  --accent: #0b6bcb;
+  --accent-foreground: #ffffff;
+  --accent-soft: #c2437e;
+  --muted-foreground: #56708c;
+  --border: #bcd2ee;
+  --border-strong: #8fb0da;
+  --danger: #c1272d;
+  --selection: #a9ccf5;
+}
+
+:root[data-theme="rule34"] {
+  color-scheme: dark;
+  --background: #0b0f08;
+  --foreground: #e8f2dc;
+  --surface: #141a0f;
+  --surface-soft: #1f2a16;
+  --accent: #8bc34a;
+  --accent-foreground: #10160c;
+  --accent-soft: #cdeea6;
+  --muted-foreground: #9db38a;
+  --border: #2c3d22;
+  --border-strong: #48622f;
+  --danger: #ff9a9a;
+  --selection: #334d24;
+}
+
+:root[data-theme="umineko"] {
+  color-scheme: dark;
+  --background: #120d10;
+  --foreground: #f3e6cf;
+  --surface: #1e1519;
+  --surface-soft: #2b1d23;
+  --accent: #c9a227;
+  --accent-foreground: #1a1208;
+  --accent-soft: #e59a7a;
+  --muted-foreground: #bb9f88;
+  --border: #3d2a30;
+  --border-strong: #61434c;
+  --danger: #ff8f8f;
+  --selection: #4a2f35;
+}
+
+:root[data-theme="bernkastel"] {
+  color-scheme: dark;
+  --background: #06090f;
+  --foreground: #e0eaf5;
+  --surface: #0c1424;
+  --surface-soft: #0f1a30;
+  --accent: #4a90d9;
+  --accent-foreground: #ffffff;
+  --accent-soft: #7eb3f0;
+  --muted-foreground: #9bb5d0;
+  --border: #1a2a40;
+  --border-strong: #3d5a80;
+  --danger: #ff6b6b;
+  --selection: #1a2a40;
+}
+
+:root[data-theme="lambdadelta"] {
+  color-scheme: dark;
+  --background: #120810;
+  --foreground: #f5e0ef;
+  --surface: #1a0815;
+  --surface-soft: #240c1f;
+  --accent: #ff69b4;
+  --accent-foreground: #2a0814;
+  --accent-soft: #ffb6d9;
+  --muted-foreground: #d09bb8;
+  --border: #4a2038;
+  --border-strong: #6a3a5a;
+  --danger: #ff6b6b;
+  --selection: #4a2038;
+}
+
+:root[data-theme="beatrice"] {
+  color-scheme: dark;
+  --background: #0f0a08;
+  --foreground: #f5ebe0;
+  --surface: #1a1208;
+  --surface-soft: #241a0c;
+  --accent: #d4a84b;
+  --accent-foreground: #1a1208;
+  --accent-soft: #f0d590;
+  --muted-foreground: #c9b8a0;
+  --border: #3d2a1a;
+  --border-strong: #6b4c3a;
+  --danger: #ff6b6b;
+  --selection: #3d2a1a;
+}
+
+:root[data-theme="erika"] {
+  color-scheme: dark;
+  --background: #060a0f;
+  --foreground: #e0f0f5;
+  --surface: #0a1824;
+  --surface-soft: #0e2030;
+  --accent: #00b4d8;
+  --accent-foreground: #041820;
+  --accent-soft: #e27599;
+  --muted-foreground: #90c0d8;
+  --border: #1a2a40;
+  --border-strong: #4a3060;
+  --danger: #ff6b6b;
+  --selection: #1a2a40;
+}
+
+:root[data-theme="battler"] {
+  color-scheme: dark;
+  --background: #0f0608;
+  --foreground: #f0e0e5;
+  --surface: #1f0c14;
+  --surface-soft: #28101a;
+  --accent: #e85a70;
+  --accent-foreground: #ffffff;
+  --accent-soft: #f2b8c6;
+  --muted-foreground: #c0a0a8;
+  --border: #2a0f18;
+  --border-strong: #4a1520;
+  --danger: #ff6b6b;
+  --selection: #2a0f18;
+}
+
+:root[data-theme="virgilia"] {
+  color-scheme: light;
+  --background: #e8eaf0;
+  --foreground: #1a1a24;
+  --surface: #ffffff;
+  --surface-soft: #dde0ea;
+  --accent: #8b1a2d;
+  --accent-foreground: #ffffff;
+  --accent-soft: #b83048;
+  --muted-foreground: #5a5e6c;
+  --border: #cdd1dc;
+  --border-strong: #9ba0b0;
+  --danger: #c62828;
+  --selection: #cdd1dc;
+}
+
+:root[data-theme="catppuccin"] {
+  color-scheme: dark;
+  --background: #1e1e2e;
+  --foreground: #cdd6f4;
+  --surface: #313244;
+  --surface-soft: #45475a;
+  --accent: #cba6f7;
+  --accent-foreground: #1e1e2e;
+  --accent-soft: #f5c2e7;
+  --muted-foreground: #a6adc8;
+  --border: #45475a;
+  --border-strong: #585b70;
+  --danger: #f38ba8;
+  --selection: #585b70;
+}
+
+:root[data-theme="danbooru"],
 :root[data-theme="light"] {
   color-scheme: light;
   --background: #f5f7fa;
   --foreground: #222222;
   --surface: #ffffff;
   --surface-soft: #eef4fb;
-  --card: #ffffff;
-  --card-foreground: #222222;
-  --popover: #ffffff;
-  --popover-foreground: #222222;
-  --primary: #0075f8;
-  --primary-foreground: #ffffff;
   --accent: #0075f8;
   --accent-foreground: #ffffff;
   --accent-soft: #d6336c;
-  --muted: #eef4fb;
   --muted-foreground: #6c757d;
   --border: #d9e2ec;
   --border-strong: #a8bdd1;
-  --input: #ffffff;
-  --ring: #0075f8;
   --danger: #c1272d;
   --selection: #bcd8f7;
+}
+
+:root[data-theme="safebooru"],
+:root[data-theme="rule34"],
+:root[data-theme="umineko"],
+:root[data-theme="bernkastel"],
+:root[data-theme="lambdadelta"],
+:root[data-theme="beatrice"],
+:root[data-theme="erika"],
+:root[data-theme="battler"],
+:root[data-theme="virgilia"],
+:root[data-theme="catppuccin"],
+:root[data-theme="danbooru"],
+:root[data-theme="light"] {
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface);
+  --popover-foreground: var(--foreground);
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-foreground);
+  --muted: var(--surface-soft);
+  --input: var(--surface);
+  --ring: var(--accent);
+}
+
+html[data-font="system"] {
+  --font-body: "Atkinson Hyperlegible", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+}
+html[data-font="serif"] {
+  --font-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+html[data-font="rounded"] {
+  --font-body: Nunito, ui-rounded, "Segoe UI", sans-serif;
+}
+html[data-font="mono"] {
+  --font-body: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+html[data-font="hack"] {
+  --font-body: Hack, "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 
 @media (max-width: 900px) {

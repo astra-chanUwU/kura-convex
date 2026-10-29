@@ -1,13 +1,15 @@
-import { useQuery } from "convex/react";
-import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../convex/_generated/api";
+import { AppearanceControls } from "@/components/AppearanceControls";
 import { AuthCard } from "@/components/AuthCard";
 import { Board } from "@/components/Board";
 import { PostView } from "@/components/PostView";
 import { Preferences } from "@/components/Preferences";
 import { SettingsMenu } from "@/components/SettingsMenu";
 import { UploadDialog } from "@/components/UploadDialog";
-import { authClient } from "@/lib/auth-client";
+import { useAppearance } from "@/hooks/useAppearance";
+import type { FontId, ThemeId } from "@/lib/appearance";
 import {
   boardHash,
   EMPTY_FILTER,
@@ -60,7 +62,27 @@ function Kura() {
   const [upload, setUpload] = useState(false);
   const [view, setView] = useState<BoardView>(() => readBoardView());
   const prefs = useQuery(api.preferences.get);
-  const session = authClient.useSession();
+  const account = useQuery(api.auth.getCurrentUser);
+  const save = useMutation(api.preferences.save);
+  const signedIn = account != null && prefs?.signedIn === true;
+  const persistAppearance = useCallback(
+    (theme: ThemeId, font: FontId) => {
+      if (!prefs?.signedIn) return;
+      void save({
+        displayName: prefs.displayName,
+        bio: prefs.bio,
+        location: prefs.location,
+        website: prefs.website,
+        theme,
+        font,
+        showSensitive: prefs.showSensitive,
+        includeTags: prefs.includeTags,
+        excludeTags: prefs.excludeTags,
+      }).catch(() => {});
+    },
+    [prefs, save],
+  );
+  const { theme, font, change } = useAppearance(prefs?.theme, prefs?.font, signedIn, persistAppearance);
 
   useEffect(() => {
     const onHash = () => setRoute(parseHash(window.location.hash));
@@ -69,31 +91,13 @@ function Kura() {
   }, []);
 
   useEffect(() => {
-    const theme = prefs?.theme ?? "dark";
-    const root = document.documentElement;
-    const apply = (value: "light" | "dark") => {
-      root.dataset.theme = value;
-    };
-    if (theme === "light" || theme === "dark") {
-      apply(theme);
-      return;
-    }
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const sync = () => apply(media.matches ? "dark" : "light");
-    sync();
-    media.addEventListener("change", sync);
-    return () => media.removeEventListener("change", sync);
-  }, [prefs?.theme]);
-
-  useEffect(() => {
     if (route.name !== "board" || route.saved || route.filter.cleared || filterActive(route.filter)) return;
     if (!prefs?.signedIn) return;
     if (prefs.includeTags.length === 0 && prefs.excludeTags.length === 0) return;
     writeBoard(false, { ...EMPTY_FILTER, tags: prefs.includeTags, exclude: prefs.excludeTags }, true);
   }, [route, prefs]);
 
-  const user = session.data?.user;
-  const name = user?.name || prefs?.displayName || "Account";
+  const name = account?.name || prefs?.displayName || "Account";
   const onBoard = route.name === "board";
   const boardSaved = route.name === "board" ? route.saved : route.name === "post" ? route.saved : false;
   const wideBoard = onBoard && view.wide;
@@ -121,7 +125,7 @@ function Kura() {
           <a href="#/saved" className={navClass(boardSaved && (route.name === "board" || route.name === "post"))}>
             Saved
           </a>
-          {user ? (
+          {signedIn ? (
             <a href="#/preferences" className={cn(navClass(route.name === "preferences"), "min-w-0 gap-2")}>
               <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border bg-surface-soft text-xs font-bold text-accent">
                 {name.slice(0, 1).toUpperCase()}
@@ -142,7 +146,8 @@ function Kura() {
             </>
           )}
         </nav>
-        <div className="ml-auto flex shrink-0 items-center">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <AppearanceControls theme={theme} font={font} onChange={change} />
           <SettingsMenu onPreferences={() => (window.location.hash = "#/preferences")} />
         </div>
       </header>
@@ -168,7 +173,7 @@ function Kura() {
               writeBoardView(next);
             }}
             onUpload={() => {
-              if (user) setUpload(true);
+              if (signedIn) setUpload(true);
               else window.location.hash = "#/auth";
             }}
           />
@@ -176,7 +181,9 @@ function Kura() {
         {route.name === "post" && (
           <PostView id={route.id} back={boardHash(route.saved, route.filter)} />
         )}
-        {route.name === "preferences" && <Preferences />}
+        {route.name === "preferences" && (
+          <Preferences theme={theme} font={font} onAppearance={change} />
+        )}
         {route.name === "auth" && <AuthCard mode={route.mode} />}
       </main>
       {upload && <UploadDialog onClose={() => setUpload(false)} />}

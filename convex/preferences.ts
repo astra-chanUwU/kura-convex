@@ -1,14 +1,15 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { optionalUserId, requireUserId } from "./authz";
-import { clip, normalizeTags, theme } from "./validators";
+import { clip, font, normalizeFont, normalizeTags, normalizeTheme, theme } from "./validators";
 
 const defaults = {
   displayName: "You",
   bio: "",
   location: "",
   website: "",
-  theme: "dark" as const,
+  theme: "kura" as const,
+  font: "system" as const,
   showSensitive: false,
   includeTags: [] as string[],
   excludeTags: [] as string[],
@@ -33,7 +34,8 @@ export const get = query({
       bio: row.bio,
       location: row.location,
       website: row.website,
-      theme: row.theme,
+      theme: normalizeTheme(row.theme),
+      font: normalizeFont(row.font),
       showSensitive: row.showSensitive,
       includeTags: row.includeTags,
       excludeTags: row.excludeTags,
@@ -49,6 +51,7 @@ export const save = mutation({
     location: v.string(),
     website: v.string(),
     theme,
+    font,
     showSensitive: v.boolean(),
     includeTags: v.array(v.string()),
     excludeTags: v.array(v.string()),
@@ -65,7 +68,8 @@ export const save = mutation({
       bio: clip(args.bio, 500),
       location: clip(args.location, 80),
       website,
-      theme: args.theme,
+      theme: normalizeTheme(args.theme),
+      font: normalizeFont(args.font),
       showSensitive: args.showSensitive,
       includeTags: normalizeTags(args.includeTags),
       excludeTags: normalizeTags(args.excludeTags),

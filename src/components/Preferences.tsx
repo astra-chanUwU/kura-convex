@@ -1,12 +1,21 @@
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
-import { ThemeSwitch } from "@/components/ThemeSwitch";
+import { AppearanceControls } from "@/components/AppearanceControls";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import type { FontId, ThemeId } from "@/lib/appearance";
 
-export function Preferences() {
+export function Preferences({
+  theme,
+  font,
+  onAppearance,
+}: {
+  theme: ThemeId;
+  font: FontId;
+  onAppearance: (next: Partial<{ theme: ThemeId; font: FontId }>) => void;
+}) {
   const prefs = useQuery(api.preferences.get);
   const save = useMutation(api.preferences.save);
   const [displayName, setDisplayName] = useState("");
@@ -58,7 +67,8 @@ export function Preferences() {
             bio,
             location,
             website,
-            theme: prefs.theme,
+            theme,
+            font,
             showSensitive: prefs.showSensitive,
             includeTags: include.split(/\s+/).filter(Boolean),
             excludeTags: exclude.split(/\s+/).filter(Boolean),
@@ -73,24 +83,7 @@ export function Preferences() {
           <Label htmlFor="bio">Bio</Label>
           <Textarea id="bio" value={bio} onChange={(event) => setBio(event.target.value)} />
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm text-muted-foreground">Theme</span>
-          <ThemeSwitch
-            value={prefs.theme}
-            onChange={(theme) => {
-              void save({
-                displayName,
-                bio,
-                location: prefs.location,
-                website: prefs.website,
-                theme,
-                showSensitive: prefs.showSensitive,
-                includeTags: prefs.includeTags,
-                excludeTags: prefs.excludeTags,
-              });
-            }}
-          />
-        </div>
+        <AppearanceControls theme={theme} font={font} onChange={onAppearance} />
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="grid gap-1.5">
             <Label htmlFor="location">Location</Label>

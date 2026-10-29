@@ -1,6 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { rating, theme } from "./validators";
+import { font, rating, storedTheme } from "./validators";
 
 // Image bytes live in MinIO. These tables store keys and metadata only.
 export default defineSchema({
@@ -52,7 +52,8 @@ export default defineSchema({
     bio: v.string(),
     location: v.string(),
     website: v.string(),
-    theme,
+    theme: storedTheme,
+    font: v.optional(font),
     showSensitive: v.boolean(),
     includeTags: v.array(v.string()),
     excludeTags: v.array(v.string()),

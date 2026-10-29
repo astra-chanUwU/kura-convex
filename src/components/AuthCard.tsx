@@ -1,5 +1,5 @@
 import { useQuery } from "convex/react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -13,21 +13,40 @@ export function AuthCard({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+
+  useEffect(() => {
+    if (!waiting) return;
+    if (user) {
+      window.location.hash = "#/";
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setWaiting(false);
+      setError("That account was accepted, but Kura did not start a session. Try signing in again.");
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [waiting, user]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
     setPending(true);
-    const result =
-      mode === "sign-up"
-        ? await authClient.signUp.email({ name, email, password })
-        : await authClient.signIn.email({ email, password });
-    setPending(false);
-    if (result.error) {
-      setError(result.error.message ?? "Could not sign in.");
-      return;
+    try {
+      const result =
+        mode === "sign-up"
+          ? await authClient.signUp.email({ name, email, password })
+          : await authClient.signIn.email({ email, password });
+      if (result.error) {
+        setError(result.error.message ?? "Could not sign in.");
+        return;
+      }
+      setWaiting(true);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not sign in.");
+    } finally {
+      setPending(false);
     }
-    window.location.hash = "#/";
   }
 
   return (
@@ -92,8 +111,8 @@ export function AuthCard({ mode }: { mode: "sign-in" | "sign-up" }) {
           />
         </div>
         {error && <p className="m-0 text-sm text-danger">{error}</p>}
-        <Button type="submit" disabled={pending} className="w-fit">
-          {pending ? "Working…" : mode === "sign-in" ? "Continue with email" : "Create account"}
+        <Button type="submit" disabled={pending || waiting} className="w-fit">
+          {pending || waiting ? "Working…" : mode === "sign-in" ? "Continue with email" : "Create account"}
         </Button>
       </form>
     </section>

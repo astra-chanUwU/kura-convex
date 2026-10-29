@@ -2,10 +2,8 @@ import { useMutation, useQuery } from "convex/react";
 import { Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
-import { ThemeSwitch } from "@/components/ThemeSwitch";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { authClient } from "@/lib/auth-client";
 
 export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
   const prefs = useQuery(api.preferences.get);
@@ -13,7 +11,6 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
   const [open, setOpen] = useState(false);
   const [askAge, setAskAge] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const session = authClient.useSession();
 
   useEffect(() => {
     if (!open) return;
@@ -29,8 +26,6 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
     };
   }, [open]);
 
-  const theme = prefs?.theme ?? "dark";
-
   async function patch(partial: Partial<NonNullable<typeof prefs>>) {
     if (!prefs?.signedIn) {
       window.location.hash = "#/auth";
@@ -42,6 +37,7 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
       location: prefs.location,
       website: prefs.website,
       theme: prefs.theme,
+      font: prefs.font,
       showSensitive: prefs.showSensitive,
       includeTags: prefs.includeTags,
       excludeTags: prefs.excludeTags,
@@ -51,7 +47,6 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
 
   return (
     <div ref={rootRef} className="flex items-center gap-2">
-      <ThemeSwitch value={theme} onChange={(next) => void patch({ theme: next })} />
       <div className="relative">
         <Button
           variant="outline"
@@ -80,7 +75,7 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
               className="mt-2 w-full cursor-pointer rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-soft"
               onClick={() => {
                 setOpen(false);
-                if (session.data?.user) onPreferences();
+                if (prefs?.signedIn) onPreferences();
                 else window.location.hash = "#/auth";
               }}
             >
