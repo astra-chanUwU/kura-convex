@@ -1,7 +1,6 @@
 {
   "name": "kura-convex",
   "private": true,
-  "packageManager": "pnpm@12.15.0",
   "version": "0.0.0",
   "type": "module",
   "engines": {
