@@ -1,12 +1,12 @@
 # Kura Convex
 
-Image board. Posts, tags, accounts, and preferences live in Convex. Picture files live in object storage. A Go process writes the board thumbnails. Remake of [Kura v4](https://github.com/astra-chanUwU/kura-v4).
+Image board. Posts, tags, accounts, and preferences live in Convex. Picture files live in object storage. The board thumbnail is written by the Node action in `convex/storage.ts`. Remake of [Kura v4](https://github.com/astra-chanUwU/kura-v4).
 
 Locally, the dev server listens on port 5175.
 
 ## What talks to what
 
-A browser never asks the Go process to resize a picture. Convex does that, then the browser reads the finished file from object storage.
+A browser never resizes a picture. The action in `convex/storage.ts` does that, then the browser reads the finished file from object storage.
 
 ```
 Browser
@@ -15,14 +15,12 @@ Browser
   │  JPEG, PNG, WebP, GIF, thumbnail
   └──────────────────────────▶ Object storage (bucket kura-images)
 
-Convex
-  │  POST /v1/thumbnails/batch
-  └──────────────────────────▶ Go thumbnail process
-                                    │  read original, write .thumb.webp
-                                    └──────────────────▶ Object storage
+Convex  (ensureThumb in convex/storage.ts)
+  │  GET the original, resize with sharp, PUT images/.../*.thumb.webp
+  └──────────────────────────▶ Object storage
 ```
 
-On this computer those four are separate processes. Convex and its dashboard come from Docker. Object storage is `pnpm s3`. The encoder is `pnpm thumbs`. The site is `pnpm dev`.
+On this computer those three are separate processes. Convex and its dashboard come from Docker. Object storage is `pnpm s3`. The site is `pnpm dev`. `ensureThumb` downloads the original from the bucket, resizes it with sharp, and PUTs `images/.../*.thumb.webp` back to the same bucket. Sharp applies EXIF orientation, keeps the longest edge at most 480, writes WebP at quality 80, keeps the first frame only, and strips metadata. `convex.json` lists `sharp` in `node.externalPackages`. Convex installs that package when the functions are pushed. The same function runs on the self-hosted Docker backend and on Convex Cloud.
 
 | Process | Address on this computer |
 | --- | --- |
@@ -31,7 +29,6 @@ On this computer those four are separate processes. Convex and its dashboard com
 | Convex HTTP (login and other HTTP actions) | http://127.0.0.1:3211 |
 | Dashboard | http://127.0.0.1:6791 |
 | Object storage | http://127.0.0.1:9000 |
-| Go thumbnails | http://127.0.0.1:5006 |
 
 ## Run it on this computer
 
@@ -43,21 +40,20 @@ node scripts/self-hosted-env.mjs
 node scripts/ensure-env.mjs
 ```
 
-`self-hosted-env` starts the Convex containers and writes `.env.local`, including an admin key. That key is the password the Convex CLI uses for this local backend. `ensure-env` adds the auth secret and the thumbnail secret, then stores them in that same local backend. Do not commit `.env.local`, `.env.production`, or `.env.convex`.
+`self-hosted-env` starts the Convex containers and writes `.env.local`, including an admin key. That key is the password the Convex CLI uses for this local backend. `ensure-env` adds the auth secret, then stores the local settings in that same local backend. Do not commit `.env.local`, `.env.production`, or `.env.convex`.
 
 The dashboard at http://127.0.0.1:6791 asks for the admin key. Paste `CONVEX_SELF_HOSTED_ADMIN_KEY` from `.env.local`.
 
-Start storage, the encoder, and the site in that order, each in its own terminal:
+Start storage and the site in that order, each in its own terminal:
 
 ```sh
 pnpm s3
-pnpm thumbs
 pnpm dev
 ```
 
 `pnpm s3` stores files under `D:\kura-minio\data`. `pnpm dev` runs `convex dev` and Vite. Leave it running while you edit `convex/`. Each save uploads those functions to the local backend. The site is http://127.0.0.1:5175. Opening that address as `127.0.0.1` sends the browser to `localhost`, because passkeys require the host to be `localhost`.
 
-With those three still running:
+With those two still running:
 
 ```sh
 pnpm seed
@@ -66,7 +62,7 @@ pnpm accounts
 
 `pnpm seed` imports 1,200 general Safebooru posts. `pnpm accounts` creates twelve users at `@kura.test`. The shared password is `KURA_SEED_PASSWORD` in `.env.local`. The first run writes `kura-local-board`. `hana@kura.test` is the owner. The others are `ren`, `sable`, `mio`, `yuna`, `akira`, `noel`, `camille`, `jules`, `priya`, `leo`, and `eden`.
 
-`pnpm dev`, `pnpm deploy`, `pnpm seed`, `pnpm accounts`, `pnpm migrate`, and `ensure-env` read `.env.local` and stop unless the Convex URL is `127.0.0.1`, `localhost`, or `::1`. A save in `pnpm dev` cannot upload functions to a server by accident. `pnpm seed -- --dry-run` only prints the import plan.
+`pnpm dev`, `pnpm run deploy`, `pnpm seed`, `pnpm accounts`, `pnpm migrate`, and `ensure-env` read `.env.local` and stop unless the Convex URL is `127.0.0.1`, `localhost`, or `::1`. A save in `pnpm dev` cannot upload functions to a server by accident. `pnpm seed -- --dry-run` only prints the import plan.
 
 ## Commands
 
@@ -74,12 +70,11 @@ pnpm accounts
 | --- | --- |
 | `pnpm dev` | `convex dev` and Vite on port 5175 |
 | `pnpm s3` | Object storage on port 9000. Files go in `D:\kura-minio\data` |
-| `pnpm thumbs` | Build and start the thumbnail service on port 5006 |
 | `pnpm seed` | Import 1,200 general Safebooru posts. See below |
 | `pnpm seed:nsfw` | Import questionable and explicit posts |
 | `pnpm accounts` | Create the local accounts and their saved posts |
-| `pnpm migrate` | Fill search text on old posts and request missing thumbnails |
-| `pnpm deploy` | Upload `convex/` once to the local backend |
+| `pnpm migrate` | Fill search text on old posts. Missing thumbnails are written by `convex/storage.ts` |
+| `pnpm run deploy` | Upload `convex/` once to the local backend. `pnpm deploy` is pnpm’s own command and does not run this script |
 | `pnpm deploy:prod` | Upload `convex/` to the server named in `.env.production`, and build the site into `dist/` |
 | `pnpm convex:prod -- …` | Run a Convex CLI command against the server named in `.env.production` |
 | `pnpm check` | Lint, typecheck, and production build. The backend can be stopped |
@@ -102,9 +97,8 @@ This computer                              The server
 │ git checkout             │            │ Docker                              │
 │   convex/                │─ upload ──▶│   Convex API        :3210           │
 │   .env.production        │            │   Convex HTTP       :3211           │
-│   dist/   (the website)  │─ copy ───▶ │   Go thumbnails     private :8080   │
-└──────────────────────────┘            │   MinIO             :9000           │
-                                        │   Dashboard         :6791           │
+│   dist/   (the website)  │─ copy ───▶ │   MinIO             :9000           │
+└──────────────────────────┘            │   Dashboard         :6791           │
                                         └─────────────────────────────────────┘
 
 Someone opening the site
@@ -115,9 +109,9 @@ Someone opening the site
   dashboard.example.com   Convex dashboard
 ```
 
-Inside Docker, Convex calls the encoder at `http://thumbnails:8080` and MinIO at `http://minio:9000`. Those names exist only on the Docker network. Port 5006 and the MinIO console on port 9001 stay closed on the public firewall.
+Docker Compose on the server runs the Convex backend, the dashboard, and MinIO. Inside the backend network, functions reach MinIO at `http://minio:9000` via `KURA_S3_ENDPOINT`. That name exists only on the Docker network. The MinIO console on port 9001 stays closed on the public firewall.
 
-`docker-compose.yml` starts MinIO with username `kura` and password `kura-secret-key`. The thumbnail service in that same file has the same pair. Change both in the file before port 9000 is reachable from the internet, and use the new pair in the settings below.
+`docker-compose.yml` starts MinIO with username `kura` and password `kura-secret-key`. Change that pair in the file before port 9000 is reachable from the internet, and use the new pair in the settings below.
 
 ### Names and HTTPS
 
@@ -140,13 +134,12 @@ On the server, clone this repo. Next to `docker-compose.yml`, create `.env`. Com
 | `CONVEX_CLOUD_ORIGIN` | `https://api.example.com` |
 | `CONVEX_SITE_ORIGIN` | `https://auth.example.com` |
 | `NEXT_PUBLIC_DEPLOYMENT_URL` | `https://api.example.com` |
-| `KURA_THUMB_SECRET` | a long random string |
 | `REDACT_LOGS_TO_CLIENT` | `true` |
 
-`CONVEX_CLOUD_ORIGIN` is the API address browsers use. `CONVEX_SITE_ORIGIN` is the login address. The dashboard loads the API from `NEXT_PUBLIC_DEPLOYMENT_URL`. `KURA_THUMB_SECRET` is the password Convex and the Go process share.
+`CONVEX_CLOUD_ORIGIN` is the API address browsers use. `CONVEX_SITE_ORIGIN` is the login address. The dashboard loads the API from `NEXT_PUBLIC_DEPLOYMENT_URL`.
 
 ```sh
-docker compose --profile thumbs --profile s3 up -d
+docker compose --profile s3 up -d
 docker compose exec backend ./generate_admin_key.sh
 ```
 
@@ -177,8 +170,6 @@ pnpm convex:prod -- env set KURA_S3_PUBLIC_ENDPOINT https://images.example.com
 pnpm convex:prod -- env set KURA_S3_BUCKET kura-images
 pnpm convex:prod -- env set KURA_S3_ACCESS_KEY_ID <MinIO user>
 pnpm convex:prod -- env set KURA_S3_SECRET_ACCESS_KEY <MinIO password>
-pnpm convex:prod -- env set KURA_THUMB_URL http://thumbnails:8080
-pnpm convex:prod -- env set KURA_THUMB_SECRET <the KURA_THUMB_SECRET from the server .env>
 ```
 
 | Setting | Who uses it |
@@ -189,10 +180,8 @@ pnpm convex:prod -- env set KURA_THUMB_SECRET <the KURA_THUMB_SECRET from the se
 | `KURA_S3_PUBLIC_ENDPOINT` | The browser, when it uploads. `https://images.example.com` |
 | `KURA_S3_BUCKET` | `kura-images` |
 | `KURA_S3_ACCESS_KEY_ID`, `KURA_S3_SECRET_ACCESS_KEY` | The MinIO user and password from `docker-compose.yml` |
-| `KURA_THUMB_URL` | Convex, from inside Docker. `http://thumbnails:8080` |
-| `KURA_THUMB_SECRET` | Same string as the server `.env` |
 
-The Go container reads the bucket with the user and password written on the `thumbnails` service in `docker-compose.yml`. Those have to match MinIO.
+The action in `convex/storage.ts` reads and writes MinIO with the `KURA_S3_*` values above.
 
 ### Upload the functions and publish the site
 
@@ -223,12 +212,12 @@ Browser
            │  signed PUT from the browser, GET of the picture
            │
 Production deployment
-  ensureThumb  ── HTTPS ──▶  https://kura-thumbnails.fly.dev
-                                  │  path-style GET and PUT
-                                  └──▶  the same bucket
+  ensureThumb in convex/storage.ts
+        │  GET the original, resize with sharp, PUT images/.../*.thumb.webp
+        └──▶  the same bucket
 ```
 
-`ensureThumb` in `convex/storage.ts` calls the process built from `go/thumbnails`. `pnpm thumbs` runs that process in Docker on this computer, for local development. The Convex Cloud path below runs the same Dockerfile on Fly. This computer does not stay on.
+`ensureThumb` in `convex/storage.ts` runs inside that production deployment. It uses the bucket settings below.
 
 ### Production deploy key
 
@@ -258,38 +247,15 @@ pnpm exec convex env set --env-file .env.convex KURA_S3_SECRET_ACCESS_KEY '<secr
 
 | Variable | R2 component name | What `convex/storage.ts` does with it |
 | --- | --- | --- |
-| `KURA_S3_ENDPOINT` | `R2_ENDPOINT` | HEAD and DELETE from the action |
+| `KURA_S3_ENDPOINT` | `R2_ENDPOINT` | GET, HEAD, PUT, and DELETE from the action |
 | `KURA_S3_PUBLIC_ENDPOINT` | same endpoint, public | Host baked into the browser's signed PUT |
 | `KURA_S3_BUCKET` | `R2_BUCKET` | Bucket name |
 | `KURA_S3_ACCESS_KEY_ID` | `R2_ACCESS_KEY_ID` | SigV4 access key |
 | `KURA_S3_SECRET_ACCESS_KEY` | `R2_SECRET_ACCESS_KEY` | SigV4 secret |
 
-For R2 the endpoint is `https://<account-id>.r2.cloudflarestorage.com`. For AWS it is `https://s3.<region>.amazonaws.com`. Both clients in this repo use path-style (`forcePathStyle` in the action, `BucketLookupPath` in `go/thumbnails`), so the object URL is `https://<endpoint>/<bucket>/<key>`.
+For R2 the endpoint is `https://<account-id>.r2.cloudflarestorage.com`. For AWS it is `https://s3.<region>.amazonaws.com`. The action uses path-style (`forcePathStyle`), so the object URL is `https://<endpoint>/<bucket>/<key>`.
 
 CORS on the bucket has to allow the website origin, `GET` and `PUT`, and header `Content-Type`. The R2 readme's policy is the shape. Put the real site origin in `AllowedOrigins`.
-
-`docker-compose.yml` still points the local `thumbnails` service at `http://host.docker.internal:9000` with user `kura`. That block is what `pnpm thumbs` uses. The Fly app gets the real bucket through `fly secrets`, not through that file.
-
-### Thumbnail service
-
-`ensureThumb` POSTs to `${KURA_THUMB_URL}/v1/thumbnails/batch` with `Authorization: Bearer ${KURA_THUMB_SECRET}`. The handler is `POST /v1/thumbnails/batch` in `go/thumbnails`. The image is `go/thumbnails/Dockerfile`. It listens on 8080 and shells out to libvips and ffmpeg. Convex Cloud has no place to run that binary.
-
-[Fly](https://fly.io/docs/languages-and-frameworks/dockerfile/) builds that Dockerfile and serves it at `https://<app>.fly.dev`. `go/thumbnails/fly.toml` sets the HTTP service to port 8080, forces HTTPS, and keeps one machine running (`min_machines_running = 1`, `auto_stop_machines = "off"`), so a thumbnail request is not waiting for a cold start. Install `flyctl`, then from `go/thumbnails`:
-
-```sh
-fly launch --no-deploy --copy-config
-fly secrets set KURA_THUMB_SECRET="<long random string>" KURA_S3_ENDPOINT="https://s3.<region>.amazonaws.com" KURA_S3_BUCKET="kura-images" KURA_S3_ACCESS_KEY_ID="<access key id>" KURA_S3_SECRET_ACCESS_KEY="<secret access key>"
-fly deploy
-```
-
-`fly launch` prints the app URL. `fly secrets` stores the bucket credentials and the bearer secret on Fly, not in git. `fly deploy` builds the Dockerfile on Fly's builder and starts the machine. `GET /health` on that URL is unauthenticated. `POST /v1/thumbnails/batch` still requires the bearer secret.
-
-```sh
-pnpm exec convex env set --env-file .env.convex KURA_THUMB_URL 'https://<app>.fly.dev'
-pnpm exec convex env set --env-file .env.convex KURA_THUMB_SECRET '<the same string passed to fly secrets>'
-```
-
-`http://thumbnails:8080` remains the address inside the self-hosted Docker network only.
 
 ### Login and the website
 
@@ -336,7 +302,7 @@ Dashboard env changes and later CLI calls for this deployment use `--env-file .e
 
 ## Seed
 
-`pnpm dev`, `pnpm s3`, and `pnpm thumbs` need to be running first. Ids already stored are skipped. Posts tagged as minors are skipped.
+`pnpm dev` and `pnpm s3` need to be running first. Seed uploads the original pictures. `importBatch` schedules `ensureThumb`, and that action writes the thumbnail. Ids already stored are skipped. Posts tagged as minors are skipped.
 
 ```sh
 pnpm seed -- --list

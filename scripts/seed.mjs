@@ -11,7 +11,6 @@ import {
 } from "@aws-sdk/client-s3";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi } from "convex/server";
-import { requestThumbnail } from "./thumb-client.mjs";
 import { BOARD_ORDER, boardFor, collect, helpText, resolvePlan, skipReason } from "./seed-lib.mjs";
 import { assertLocalBackend } from "./target.mjs";
 
@@ -102,7 +101,7 @@ async function importBoards(plan, boards, env, convex, s3) {
     try {
       const posts = await collect(board, plan.tags, plan.ratings, target, plan.pages);
       const existing = await existingIds(convex, board.id);
-      const result = await storePosts(s3, convex, env, posts, existing, target);
+      const result = await storePosts(s3, convex, posts, existing, target);
       remaining -= result.toward;
       imported += result.imported;
       covered += result.toward;
@@ -120,13 +119,13 @@ async function importBoards(plan, boards, env, convex, s3) {
   console.log(`Done. Imported ${imported} new pictures. Target ${plan.limit}.`);
 }
 
-async function storePosts(s3, convex, env, posts, existing, target) {
+async function storePosts(s3, convex, posts, existing, target) {
   let have = posts.filter((post) => existing.has(post.id)).length;
   let imported = 0;
   const pending = posts.filter((post) => !existing.has(post.id));
   let batch = [];
   for (let i = 0; i < pending.length && have + imported < target; i += 4) {
-    const downloaded = await Promise.all(pending.slice(i, i + 4).map((post) => download(s3, env, post)));
+    const downloaded = await Promise.all(pending.slice(i, i + 4).map((post) => download(s3, post)));
     for (const item of downloaded) {
       if (!item || have + imported >= target) continue;
       batch.push(item);
@@ -169,7 +168,7 @@ async function flush(convex, posts) {
   return result.inserted;
 }
 
-async function download(s3, env, post) {
+async function download(s3, post) {
   try {
     const storageKey = `images/${post.board}/${post.id}.${post.ext}`;
     const existing = await objectHead(s3, storageKey);
@@ -187,30 +186,19 @@ async function download(s3, env, post) {
       byteSize = bytes.length;
       await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: bytes, ContentType: type }));
     }
-    return finish(env, post, key, byteSize, type, s3);
+    return finish(post, key, byteSize, type);
   } catch (error) {
     console.error(`Skip ${post.board} ${post.id}: ${error instanceof Error ? error.message : error}`);
     return null;
   }
 }
 
-async function finish(env, post, storageKey, byteSize, type, s3) {
-  const thumbName = storageKey.replace(/\.[^.]+$/, ".thumb.webp");
-  const thumb = await objectHead(s3, thumbName);
-  let thumbKey = thumb?.ContentLength ? thumbName : undefined;
-  if (!thumbKey) {
-    try {
-      thumbKey = (await requestThumbnail(storageKey, env)).thumbKey;
-    } catch (error) {
-      console.error(`Thumb ${post.board} ${post.id}: ${error instanceof Error ? error.message : error}`);
-    }
-  }
+function finish(post, storageKey, byteSize, type) {
   return {
     sourceBoard: post.board,
     sourceId: post.id,
     ...(post.board === "safebooru" ? { safebooruId: post.id } : {}),
     storageKey,
-    ...(thumbKey ? { thumbKey } : {}),
     contentType: type,
     byteSize,
     width: post.width,

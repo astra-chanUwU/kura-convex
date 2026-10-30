@@ -12,14 +12,12 @@ const text = readFileSync(path, "utf8");
 const values = readEnv(path);
 assertLocalBackend(values, "node scripts/ensure-env.mjs");
 
-const thumbSecret = values.KURA_THUMB_SECRET || randomBytes(32).toString("hex");
 const sitePort = composePort("SITE_PROXY_PORT", "3211");
 const additions = {
   VITE_CONVEX_SITE_URL: `http://127.0.0.1:${sitePort}`,
   VITE_SITE_URL: "http://127.0.0.1:5175",
   VITE_S3_PUBLIC_URL: "http://127.0.0.1:9000/kura-images",
   BETTER_AUTH_SECRET: values.BETTER_AUTH_SECRET || randomBytes(32).toString("base64"),
-  KURA_THUMB_SECRET: thumbSecret,
 };
 
 let next = text;
@@ -37,8 +35,6 @@ const convexEnv = {
   KURA_S3_BUCKET: "kura-images",
   KURA_S3_ACCESS_KEY_ID: "kura",
   KURA_S3_SECRET_ACCESS_KEY: "kura-secret-key",
-  KURA_THUMB_URL: "http://thumbnails:8080",
-  KURA_THUMB_SECRET: thumbSecret,
 };
 for (const [key, value] of Object.entries(convexEnv)) {
   execFileSync("pnpm", ["exec", "convex", "env", "set", key, value], {

@@ -1,18 +1,16 @@
 # How pictures move through Kura
 
-Convex owns the post, the storage key, the account, and retries. Picture bytes stay in object storage. A Go process encodes the board thumbnail and never talks to the browser or to the Convex admin key.
+Convex owns the post, the storage key, the account, and retries. Picture bytes stay in object storage. `ensureThumb` in `convex/storage.ts` writes the board thumbnail with sharp and puts it back in the same bucket.
 
 ```mermaid
 flowchart LR
   browser["Browser"]
   convex["Convex"]
-  go["Go thumbnail service"]
   store["Object storage"]
 
   browser -->|"signed upload and queries"| convex
   browser -->|"read JPEG, PNG, WebP, GIF, or WebP thumb"| store
-  convex -->|"schedule encode, then record thumbKey"| go
-  go -->|"read original, write thumb"| store
+  convex -->|"GET original, resize, PUT thumb"| store
   convex -->|"HEAD the object before saving the post"| store
 ```
 
@@ -27,7 +25,6 @@ sequenceDiagram
   participant Browser
   participant Convex
   participant Store as Object storage
-  participant Go as Go encoder
 
   Browser->>Convex: prepareUpload(contentType, byteSize)
   Convex-->>Browser: storageKey and signed PUT URL
@@ -36,32 +33,24 @@ sequenceDiagram
   Convex->>Store: HEAD the original
   Convex->>Convex: insert the post
   Convex->>Convex: schedule ensureThumb
-  Convex->>Go: POST /v1/thumbnails/batch
-  Go->>Store: GET original
-  Go->>Store: PUT images/uuid.thumb.webp
+  Convex->>Store: GET original
+  Convex->>Convex: resize with sharp
+  Convex->>Store: PUT images/uuid.thumb.webp
   Convex->>Store: HEAD the thumbnail
   Convex->>Convex: setThumb
 ```
 
 `prepareUpload` signs the original only. `publish` checks the key, the content type, and the byte size, then inserts the post. When `thumbKey` is absent, it schedules `ensureThumb`.
 
-`ensureThumb` is an internal Node action. It calls `KURA_THUMB_URL` (default `http://thumbnails:8080`) with `Authorization: Bearer` and the shared `KURA_THUMB_SECRET`. On success it HEADs the WebP and runs `setThumb`. A missing post after encode schedules deletion of that thumb key. Failures retry after 2s, 15s, and 60s. A 4xx from the service stops the retries. Until `thumbKey` is set, the board shows the original.
+`ensureThumb` is an internal Node action in `convex/storage.ts`. It downloads the original, resizes it with sharp, and PUTs the WebP. On success it HEADs the WebP and runs `setThumb`. A missing post after the resize schedules deletion of that thumb key. A picture sharp cannot read is logged and left without `thumbKey`, so the board keeps showing the original. A storage error is retried after 2s, 15s, and 60s.
 
 `setThumb` is the only write of `thumbKey` after insert. It does nothing if the post is gone or the thumb is already recorded, and it rejects a key that is not `thumbKeyFor(storageKey)`.
 
-## The Go encoder
+## The thumbnail
 
-`pnpm thumbs` starts the Compose service `thumbnails` (profile `thumbs`) and publishes port 5006. The container listens on 8080. It has MinIO credentials and the shared secret. It does not have the Convex admin key.
+`ensureThumb` downloads the original from the bucket and resizes it with sharp. Sharp applies EXIF orientation, keeps the longest edge at most 480, writes WebP at quality 80, keeps the first frame only, and strips metadata. The action PUTs `images/.../*.thumb.webp` back to the same bucket. The thumb key drops the extension and adds `.thumb.webp`, the same rule as `thumbKeyFor` in `shared/storage.ts`.
 
-| Route | Auth | Behavior |
-| --- | --- | --- |
-| `GET /health` | no | Process is up |
-| `GET /v1/supported` | bearer | Still images and video extensions the encoder accepts |
-| `POST /v1/thumbnails/batch` | bearer | 1–20 keys. Always HTTP 200, with `ok` and `failed` per key |
-
-Accepted keys are `images/<uuid>.<ext>` and `images/<board>/<id>.<ext>` for safebooru, danbooru, gelbooru, konachan, and yandere. The thumb key drops the extension and adds `.thumb.webp`, the same rule as `thumbKeyFor` in `shared/storage.ts`. An existing thumb between 1 byte and 2 MB is returned as-is unless `force` is set.
-
-Stills use libvips: longest edge 480, first frame, WebP quality 80, metadata stripped. GIF and WebP can keep animation when `animate` is set. `mp4`, `webm`, and `mov` use ffmpeg for one frame, then libvips. The upload form still accepts only still images.
+`convex.json` lists `sharp` in `node.externalPackages`. Convex installs that package when the functions are pushed. The same function runs on the self-hosted Docker backend and on Convex Cloud. On a server, functions reach MinIO at `http://minio:9000` via `KURA_S3_ENDPOINT`.
 
 ## What the board and the post page read
 
@@ -83,12 +72,12 @@ Public reads stay public. Saving a picture and writing preferences require a sig
 
 ## Seed and migrate
 
-`pnpm seed` imports a broad general-rated Safebooru catalog. `--board` adds Danbooru, Yande.re, Konachan, or Gelbooru, and `--preset nsfw` asks for questionable and explicit posts. An object already in the bucket is reused. A missing original is downloaded and PUT, then the script asks `http://127.0.0.1:5006` for the thumb when that thumb is not already stored. If the encoder fails, the post is still imported and the board falls back to the original. Ids already stored for that board are skipped. Posts tagged as minors are skipped.
+`pnpm seed` imports a broad general-rated Safebooru catalog. `--board` adds Danbooru, Yande.re, Konachan, or Gelbooru, and `--preset nsfw` asks for questionable and explicit posts. An object already in the bucket is reused. A missing original is downloaded and PUT. Seed uploads original pictures. `importBatch` schedules `ensureThumb`, which writes the thumbnail. Ids already stored for that board are skipped. Posts tagged as minors are skipped.
 
 `pnpm accounts` signs up the twelve local accounts, writes each profile and saved set, and attributes posts that still have the import author. New accounts with those emails receive the same role. Everyone else is a member.
 
-`pnpm migrate` walks posts with the admin key, fills `searchText` and tag order, then batches any post that still has no `thumbKey` through the same host encoder and `setThumb`.
+`pnpm migrate` walks posts with the admin key and fills `searchText` and tag order. A post that still has no `thumbKey` gets its thumbnail from `ensureThumb` in `convex/storage.ts`.
 
 ## What Convex does not do
 
-Convex file storage is not used for pictures. Actions do not resize bytes. There is no Redis copy of a thumbnail, and there is no public route that encodes an arbitrary URL. The browser never calls the Go service. Seed and migrate call it from the host only because they run outside the Convex network. A normal upload is scheduled by Convex.
+Convex file storage is not used for pictures. There is no Redis copy of a thumbnail, and there is no public route that encodes an arbitrary URL. The browser does not resize the file. Seed uploads the original, and `ensureThumb` writes the thumbnail. A normal upload is scheduled by Convex.

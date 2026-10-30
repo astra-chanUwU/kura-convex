@@ -1,8 +1,9 @@
 "use node";
 
-import { DeleteObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ConvexError, v } from "convex/values";
+import sharp from "sharp";
 import { thumbKeyFor } from "../shared/storage";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
@@ -119,6 +120,20 @@ export const publish = action({
 });
 
 const retryDelays = [2_000, 15_000, 60_000];
+const THUMB_EDGE = 480;
+
+async function encodeBoardThumb(original: Uint8Array) {
+  return sharp(original, { animated: false, pages: 1 })
+    .autoOrient()
+    .resize({
+      width: THUMB_EDGE,
+      height: THUMB_EDGE,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({ quality: 80 })
+    .toBuffer();
+}
 
 export const ensureThumb = internalAction({
   args: { postId: v.id("posts"), attempt: v.number() },
@@ -127,32 +142,43 @@ export const ensureThumb = internalAction({
     const post = await ctx.runQuery(internal.maintenance.thumbTarget, { postId: args.postId });
     if (!post || post.thumbKey) return null;
     const thumbKey = thumbKeyFor(post.storageKey);
+    const stored = client(env("KURA_S3_ENDPOINT", "http://minio:9000"));
     try {
-      const response = await fetch(`${env("KURA_THUMB_URL", "http://thumbnails:8080")}/v1/thumbnails/batch`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${env("KURA_THUMB_SECRET", "")}`,
-        },
-        body: JSON.stringify({ storageKeys: [post.storageKey] }),
-        signal: AbortSignal.timeout(45_000),
-      });
-      const body = (await response.json().catch(() => null)) as {
-        ok?: { storageKey: string; thumbKey: string; byteSize: number }[];
-        failed?: { message: string }[];
-        message?: string;
-      } | null;
-      if (response.status >= 400 && response.status < 500) {
-        console.error(`Thumbnail refused for ${post.storageKey}: ${body?.message ?? response.status}`);
+      const object = await stored.send(new GetObjectCommand({ Bucket: bucket(), Key: post.storageKey }));
+      const body = object.Body;
+      if (!body || !("transformToByteArray" in body)) {
+        throw new Error("The original could not be read from storage.");
+      }
+      if (object.ContentLength !== undefined && (object.ContentLength <= 0 || object.ContentLength > MAX_BYTES)) {
+        console.error(`Thumbnail refused for ${post.storageKey}: original is empty or over 20 MB`);
         return null;
       }
-      const made = body?.ok?.find((item) => item.storageKey === post.storageKey && item.thumbKey === thumbKey);
-      if (!response.ok || !made || made.byteSize <= 0 || made.byteSize > MAX_THUMB_BYTES) {
-        throw new Error(body?.failed?.[0]?.message || body?.message || `Thumbnail service returned ${response.status}`);
+      const original = await body.transformToByteArray();
+      if (original.byteLength <= 0 || original.byteLength > MAX_BYTES) {
+        console.error(`Thumbnail refused for ${post.storageKey}: original is empty or over 20 MB`);
+        return null;
       }
-      const landed = await client(env("KURA_S3_ENDPOINT", "http://minio:9000")).send(
-        new HeadObjectCommand({ Bucket: bucket(), Key: thumbKey }),
+      let encoded: Buffer;
+      try {
+        encoded = await encodeBoardThumb(original);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "The picture could not be encoded.";
+        console.error(`Thumbnail refused for ${post.storageKey}: ${message}`);
+        return null;
+      }
+      if (encoded.length <= 0 || encoded.length > MAX_THUMB_BYTES) {
+        console.error(`Thumbnail refused for ${post.storageKey}: thumbnail is empty or over 2 MB`);
+        return null;
+      }
+      await stored.send(
+        new PutObjectCommand({
+          Bucket: bucket(),
+          Key: thumbKey,
+          Body: encoded,
+          ContentType: "image/webp",
+        }),
       );
+      const landed = await stored.send(new HeadObjectCommand({ Bucket: bucket(), Key: thumbKey }));
       if (!landed.ContentLength || landed.ContentLength > MAX_THUMB_BYTES) {
         throw new Error("The thumbnail did not land in storage.");
       }

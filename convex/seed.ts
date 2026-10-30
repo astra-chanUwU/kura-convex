@@ -1,5 +1,6 @@
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 import { searchTextFor, writeTags } from "./records";
 import { font, normalizeTags, rating, theme } from "./validators";
@@ -92,6 +93,9 @@ export const importBatch = internalMutation({
       };
       const id = await ctx.db.insert("posts", { ...fields, searchText: searchTextFor(fields) });
       await writeTags(ctx, id, tags, post.createdAt);
+      if (!post.thumbKey) {
+        await ctx.scheduler.runAfter(0, internal.storage.ensureThumb, { postId: id, attempt: 0 });
+      }
       inserted += 1;
     }
     return { inserted };

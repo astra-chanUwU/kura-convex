@@ -12,7 +12,7 @@ const cli = fileURLToPath(new URL("../node_modules/convex/bin/main.js", import.m
 const prod = process.argv.includes("--prod");
 
 if (!prod) {
-  assertLocalBackend(localBackendEnv(), "pnpm deploy");
+  assertLocalBackend(localBackendEnv(), "pnpm run deploy");
   const result = spawnSync(process.execPath, [cli, "deploy"], {
     stdio: "inherit",
     env: localProcessEnv(),

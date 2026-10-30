@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi } from "convex/server";
-import { requestThumbnails } from "./thumb-client.mjs";
 import { assertLocalBackend } from "./target.mjs";
 
 const env = readEnv(".env.local");
@@ -30,26 +29,20 @@ cursor = null;
 let thumbs = 0;
 for (;;) {
   const page = await convex.query(anyApi.maintenance.postsMissingThumbs, { cursor });
-  if (page.posts.length > 0) {
-    if (!env.KURA_THUMB_SECRET) {
-      console.error("KURA_THUMB_SECRET is missing. Run node scripts/ensure-env.mjs, then pnpm thumbs.");
-      process.exit(1);
+  for (const post of page.posts) {
+    try {
+      await convex.action(anyApi.storage.ensureThumb, { postId: post.id, attempt: 0 });
+    } catch (error) {
+      console.error(`\nSkip thumb ${post.storageKey}: ${error instanceof Error ? error.message : error}`);
+      continue;
     }
-    const result = await requestThumbnails(
-      page.posts.map((post) => post.storageKey),
-      env,
-    );
-    const posts = new Map(page.posts.map((post) => [post.storageKey, post]));
-    for (const item of result.ok) {
-      const post = posts.get(item.storageKey);
-      if (!post) continue;
-      await convex.mutation(anyApi.maintenance.setThumb, { postId: post.id, thumbKey: item.thumbKey });
-      thumbs += 1;
-      if (thumbs % 25 === 0) console.log(`Thumbnails ${thumbs}`);
+    const after = await convex.query(anyApi.maintenance.thumbTarget, { postId: post.id });
+    if (!after?.thumbKey) {
+      console.error(`\nSkip thumb ${post.storageKey}`);
+      continue;
     }
-    for (const item of result.failed) {
-      console.error(`\nSkip thumb ${item.storageKey}: ${item.message}`);
-    }
+    thumbs += 1;
+    if (thumbs % 25 === 0) console.log(`Thumbnails ${thumbs}`);
   }
   if (page.isDone) break;
   cursor = page.cursor;
