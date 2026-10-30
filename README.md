@@ -9,7 +9,7 @@ A local remake of [Kura](https://github.com/astra-chanUwU/kura-v4). The backend 
 | HTTP actions | http://127.0.0.1:3211 |
 | Dashboard | http://127.0.0.1:6791 |
 
-The app is an image board. Posts and preferences live in Convex. Picture files live in MinIO. Accounts use Better Auth. A Safebooru seed can fill the board with general-rated pictures tagged yuri, cute, anime girl (`1girl`), and cyberpunk.
+The app is an image board. Posts and preferences live in Convex. The Convex backend keeps its database and files in the Docker `data` volume. Picture files live in a local S3 bucket, `kura-images`, served by s3rver. Accounts use Better Auth. `pnpm seed` fills the board from public boorus. The default is a broad general-rated Safebooru catalog. Other presets and flags pull Danbooru, Yande.re, Konachan, and Gelbooru, including questionable and explicit posts.
 
 ## Setup
 
@@ -35,7 +35,7 @@ Paste the admin key into the dashboard at http://127.0.0.1:6791.
 
 ## Develop
 
-`pnpm dev` runs `convex dev` against the URL in `.env.local` and starts Vite. Leave it running while you edit `convex/`. Picture bytes are served by a local S3 stand-in, because the public MinIO images are no longer published. Start that before the board, then seed if the board is empty.
+`pnpm dev` runs `convex dev` against the URL in `.env.local` and starts Vite. Leave it running while you edit `convex/`. Picture bytes are served by s3rver, because the public MinIO images are no longer published. Start that before the board, then seed if the board is empty.
 
 ```sh
 node scripts/ensure-env.mjs
@@ -44,9 +44,9 @@ pnpm thumbs
 pnpm seed
 ```
 
-`pnpm s3` stores files under `D:\kura-minio\data` and listens on port 9000. `pnpm thumbs` builds the Go thumbnail service and listens on port 5006. Convex calls that service after an upload. The service reads the original from MinIO and writes a 480px WebP beside it. The board uses the thumbnail. The post page uses the original. Until the thumbnail exists, the board shows the original.
+`pnpm s3` runs s3rver, stores files under `D:\kura-minio\data`, and listens on port 9000. `pnpm thumbs` builds the Go thumbnail service and listens on port 5006. Convex calls that service after an upload. The service reads the original from `kura-images` and writes a 480px WebP beside it. The board uses the thumbnail. The post page uses the original. Until the thumbnail exists, the board shows the original.
 
-`pnpm seed` pulls 1,200 general-rated Safebooru samples, asks the thumbnail service for the small copy, and skips ids that are already stored. It calls the internal seed functions with the admin key.
+`pnpm seed` pulls 1,200 general-rated Safebooru samples across portraits, scenery, fashion, fantasy, and the original yuri, cute, and cyberpunk tags. It asks the thumbnail service for the small copy and skips ids that are already stored. It calls the internal seed functions with the admin key. `pnpm seed -- --list` prints presets, tag sets, and boards. `--tags`, `--set`, `--board`, and `--rating` choose the search. `pnpm seed:nsfw` imports questionable and explicit posts from Danbooru, Yande.re, and Konachan. Gelbooru joins that preset when `GELBOORU_API_KEY` and `GELBOORU_USER_ID` are set in `.env.local`. Posts tagged as minors are skipped. Leave `pnpm dev` running so Convex has the seed functions before you import.
 
 `pnpm migrate` fills search text and tag order on pictures already in Convex, then asks the thumbnail service for any picture that still has no thumbnail.
 

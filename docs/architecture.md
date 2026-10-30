@@ -59,7 +59,7 @@ sequenceDiagram
 | `GET /v1/supported` | bearer | Still images and video extensions the encoder accepts |
 | `POST /v1/thumbnails/batch` | bearer | 1–20 keys. Always HTTP 200, with `ok` and `failed` per key |
 
-Accepted keys are `images/<uuid>.<ext>` and `images/safebooru/<id>.<ext>`. The thumb key drops the extension and adds `.thumb.webp`, the same rule as `thumbKeyFor` in `shared/storage.ts`. An existing thumb between 1 byte and 2 MB is returned as-is unless `force` is set.
+Accepted keys are `images/<uuid>.<ext>` and `images/<board>/<id>.<ext>` for safebooru, danbooru, gelbooru, konachan, and yandere. The thumb key drops the extension and adds `.thumb.webp`, the same rule as `thumbKeyFor` in `shared/storage.ts`. An existing thumb between 1 byte and 2 MB is returned as-is unless `force` is set.
 
 Stills use libvips: longest edge 480, first frame, WebP quality 80, metadata stripped. GIF and WebP can keep animation when `animate` is set. `mp4`, `webm`, and `mov` use ffmpeg for one frame, then libvips. The upload form still accepts only still images.
 
@@ -83,7 +83,7 @@ Public reads stay public. Saving a picture and writing preferences require a sig
 
 ## Seed and migrate
 
-`pnpm seed` imports Safebooru samples. An object already in the bucket is reused. A missing original is downloaded and PUT, then the script asks `http://127.0.0.1:5006` for the thumb when that thumb is not already stored. If the encoder fails, the post is still imported and the board falls back to the original. Ids already stored are skipped.
+`pnpm seed` imports a broad general-rated Safebooru catalog. `--board` adds Danbooru, Yande.re, Konachan, or Gelbooru, and `--preset nsfw` asks for questionable and explicit posts. An object already in the bucket is reused. A missing original is downloaded and PUT, then the script asks `http://127.0.0.1:5006` for the thumb when that thumb is not already stored. If the encoder fails, the post is still imported and the board falls back to the original. Ids already stored for that board are skipped. Posts tagged as minors are skipped.
 
 `pnpm accounts` signs up the twelve local accounts, writes each profile and saved set, and attributes posts that still have the import author. New accounts with those emails receive the same role. Everyone else is a member.
 

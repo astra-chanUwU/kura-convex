@@ -4,8 +4,12 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { searchTextFor, writeTags } from "./records";
 import { font, normalizeTags, rating, theme } from "./validators";
 
+const importAuthors = new Set(["safebooru", "danbooru", "gelbooru", "konachan", "yandere"]);
+
 const postValidator = v.object({
-  safebooruId: v.number(),
+  sourceBoard: v.string(),
+  sourceId: v.number(),
+  safebooruId: v.optional(v.number()),
   storageKey: v.string(),
   thumbKey: v.optional(v.string()),
   contentType: v.string(),
@@ -33,6 +37,21 @@ export const existingSafebooruIds = internalQuery({
   },
 });
 
+export const existingSourceIds = internalQuery({
+  args: { sourceBoard: v.string(), paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(v.number()),
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("posts")
+      .withIndex("by_source", (q) => q.eq("sourceBoard", args.sourceBoard))
+      .paginate(args.paginationOpts);
+    return {
+      ...result,
+      page: result.page.flatMap((row) => (row.sourceId === undefined ? [] : [row.sourceId])),
+    };
+  },
+});
+
 export const importBatch = internalMutation({
   args: { posts: v.array(postValidator) },
   returns: v.object({ inserted: v.number() }),
@@ -41,9 +60,16 @@ export const importBatch = internalMutation({
     for (const post of args.posts) {
       const existing = await ctx.db
         .query("posts")
-        .withIndex("by_safebooruId", (q) => q.eq("safebooruId", post.safebooruId))
+        .withIndex("by_source", (q) => q.eq("sourceBoard", post.sourceBoard).eq("sourceId", post.sourceId))
         .unique();
       if (existing) continue;
+      if (post.sourceBoard === "safebooru") {
+        const legacy = await ctx.db
+          .query("posts")
+          .withIndex("by_safebooruId", (q) => q.eq("safebooruId", post.sourceId))
+          .unique();
+        if (legacy) continue;
+      }
       const tags = normalizeTags(post.tags, 40);
       const fields = {
         storageKey: post.storageKey,
@@ -58,8 +84,10 @@ export const importBatch = internalMutation({
         caption: post.caption,
         rating: post.rating,
         createdAt: post.createdAt,
-        authorId: "safebooru",
-        safebooruId: post.safebooruId,
+        authorId: post.sourceBoard,
+        ...(post.sourceBoard === "safebooru" ? { safebooruId: post.sourceId } : {}),
+        sourceBoard: post.sourceBoard,
+        sourceId: post.sourceId,
         tags,
       };
       const id = await ctx.db.insert("posts", { ...fields, searchText: searchTextFor(fields) });
@@ -90,7 +118,7 @@ export const assignAuthors = internalMutation({
     let updated = 0;
     let index = 0;
     for (const post of result.page) {
-      if (post.authorId !== "safebooru" || args.authors.length === 0) continue;
+      if (!importAuthors.has(post.authorId) || args.authors.length === 0) continue;
       const focus = post.tags.includes("cyberpunk")
         ? "cyberpunk"
         : post.tags.includes("yuri")

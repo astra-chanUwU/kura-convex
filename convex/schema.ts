@@ -20,7 +20,10 @@ export default defineSchema({
     rating,
     createdAt: v.number(),
     authorId: v.string(),
+    // safebooruId is the original Safebooru import key. Later imports use sourceBoard + sourceId.
     safebooruId: v.optional(v.number()),
+    sourceBoard: v.optional(v.string()),
+    sourceId: v.optional(v.number()),
     tags: v.array(v.string()),
     removedAt: v.optional(v.number()),
   })
@@ -28,6 +31,7 @@ export default defineSchema({
     .index("by_rating_createdAt", ["rating", "createdAt"])
     .index("by_storageKey", ["storageKey"])
     .index("by_safebooruId", ["safebooruId"])
+    .index("by_source", ["sourceBoard", "sourceId"])
     .index("by_author", ["authorId"])
     .searchIndex("search_posts", {
       searchField: "searchText",

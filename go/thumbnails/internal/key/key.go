@@ -7,9 +7,10 @@ import (
 )
 
 // Pictures Convex already named. User uploads are images/<uuid>.<ext>.
-// Seed files are images/safebooru/<id>.<ext>. Video extensions are accepted
-// by the encoder; the board still uploads still images only.
-var objectKey = regexp.MustCompile(`^images/(?:[0-9a-f-]{36}|safebooru/[0-9]+)\.(jpg|png|webp|gif|mp4|webm|mov)$`)
+// Seed files are images/<board>/<id>.<ext> for safebooru, danbooru, gelbooru,
+// konachan, and yandere. Video extensions are accepted by the encoder; the
+// board still uploads still images only.
+var objectKey = regexp.MustCompile(`^images/(?:[0-9a-f-]{36}|(?:safebooru|danbooru|gelbooru|konachan|yandere)/[0-9]+)\.(jpg|png|webp|gif|mp4|webm|mov)$`)
 
 func Parse(storageKey string) (thumbKey, ext string, err error) {
 	match := objectKey.FindStringSubmatch(storageKey)
