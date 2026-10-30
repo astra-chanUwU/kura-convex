@@ -223,12 +223,12 @@ Browser
            │  signed PUT from the browser, GET of the picture
            │
 Production deployment
-  ensureThumb  ── HTTPS ──▶  thumbnails container (go/thumbnails)
+  ensureThumb  ── HTTPS ──▶  https://kura-thumbnails.fly.dev
                                   │  path-style GET and PUT
                                   └──▶  the same bucket
 ```
 
-`ensureThumb` in `convex/storage.ts` is the call. The process it calls is the `thumbnails` service in `docker-compose.yml`, image built from `go/thumbnails`. `pnpm thumbs` starts that service against the local bucket. The same container has to be running where the production deployment can open `KURA_THUMB_URL`.
+`ensureThumb` in `convex/storage.ts` calls the process built from `go/thumbnails`. `pnpm thumbs` runs that process in Docker on this computer, for local development. The Convex Cloud path below runs the same Dockerfile on Fly. This computer does not stay on.
 
 ### Production deploy key
 
@@ -268,27 +268,28 @@ For R2 the endpoint is `https://<account-id>.r2.cloudflarestorage.com`. For AWS 
 
 CORS on the bucket has to allow the website origin, `GET` and `PUT`, and header `Content-Type`. The R2 readme's policy is the shape. Put the real site origin in `AllowedOrigins`.
 
-The `thumbnails` service in `docker-compose.yml` has the local endpoint and the local key written on the service, not taken from the shell:
-
-```yaml
-KURA_S3_ENDPOINT: http://host.docker.internal:9000
-KURA_S3_BUCKET: kura-images
-KURA_S3_ACCESS_KEY_ID: kura
-KURA_S3_SECRET_ACCESS_KEY: kura-secret-key
-```
-
-Replace those four with the bucket endpoint, bucket name, and the same access key before starting the container against that bucket. `KURA_THUMB_SECRET` on that service is already `${KURA_THUMB_SECRET}`.
+`docker-compose.yml` still points the local `thumbnails` service at `http://host.docker.internal:9000` with user `kura`. That block is what `pnpm thumbs` uses. The Fly app gets the real bucket through `fly secrets`, not through that file.
 
 ### Thumbnail service
 
-`ensureThumb` POSTs to `${KURA_THUMB_URL}/v1/thumbnails/batch` with `Authorization: Bearer ${KURA_THUMB_SECRET}`. The handler is `POST /v1/thumbnails/batch` in `go/thumbnails`. After the container is up, put HTTPS in front of its port 5006 and store that address on the production deployment. The secret is the same string as `KURA_THUMB_SECRET` on the container.
+`ensureThumb` POSTs to `${KURA_THUMB_URL}/v1/thumbnails/batch` with `Authorization: Bearer ${KURA_THUMB_SECRET}`. The handler is `POST /v1/thumbnails/batch` in `go/thumbnails`. The image is `go/thumbnails/Dockerfile`. It listens on 8080 and shells out to libvips and ffmpeg. Convex Cloud has no place to run that binary.
+
+[Fly](https://fly.io/docs/languages-and-frameworks/dockerfile/) builds that Dockerfile and serves it at `https://<app>.fly.dev`. `go/thumbnails/fly.toml` sets the HTTP service to port 8080, forces HTTPS, and keeps one machine running (`min_machines_running = 1`, `auto_stop_machines = "off"`), so a thumbnail request is not waiting for a cold start. Install `flyctl`, then from `go/thumbnails`:
 
 ```sh
-pnpm exec convex env set --env-file .env.convex KURA_THUMB_URL 'https://thumbs.example.com'
-pnpm exec convex env set --env-file .env.convex KURA_THUMB_SECRET '<the container secret>'
+fly launch --no-deploy --copy-config
+fly secrets set KURA_THUMB_SECRET="<long random string>" KURA_S3_ENDPOINT="https://s3.<region>.amazonaws.com" KURA_S3_BUCKET="kura-images" KURA_S3_ACCESS_KEY_ID="<access key id>" KURA_S3_SECRET_ACCESS_KEY="<secret access key>"
+fly deploy
 ```
 
-The default in code, `http://thumbnails:8080`, is the Docker network name from the self-hosted stack. The production deployment has no such network.
+`fly launch` prints the app URL. `fly secrets` stores the bucket credentials and the bearer secret on Fly, not in git. `fly deploy` builds the Dockerfile on Fly's builder and starts the machine. `GET /health` on that URL is unauthenticated. `POST /v1/thumbnails/batch` still requires the bearer secret.
+
+```sh
+pnpm exec convex env set --env-file .env.convex KURA_THUMB_URL 'https://<app>.fly.dev'
+pnpm exec convex env set --env-file .env.convex KURA_THUMB_SECRET '<the same string passed to fly secrets>'
+```
+
+`http://thumbnails:8080` remains the address inside the self-hosted Docker network only.
 
 ### Login and the website
 
