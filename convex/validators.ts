@@ -1,97 +1,79 @@
 import { v } from "convex/values";
+import { fontIds, storedThemeIds, themeIds } from "../shared/appearance";
 
-export const rating = v.union(
-  v.literal("safe"),
-  v.literal("questionable"),
-  v.literal("explicit"),
-);
+export { normalizeFont, normalizeTheme } from "../shared/appearance";
+export { normalizeTag, normalizeTags } from "../shared/tags";
 
-export const theme = v.union(
-  v.literal("kura"),
-  v.literal("safebooru"),
-  v.literal("rule34"),
-  v.literal("umineko"),
-  v.literal("bernkastel"),
-  v.literal("lambdadelta"),
-  v.literal("beatrice"),
-  v.literal("erika"),
-  v.literal("battler"),
-  v.literal("virgilia"),
-  v.literal("catppuccin"),
-  v.literal("danbooru"),
-);
+export const rating = v.union(v.literal("safe"), v.literal("questionable"), v.literal("explicit"));
 
-export const font = v.union(
-  v.literal("system"),
-  v.literal("serif"),
-  v.literal("rounded"),
-  v.literal("mono"),
-  v.literal("hack"),
-);
-
-export const storedTheme = v.union(
-  v.literal("kura"),
-  v.literal("safebooru"),
-  v.literal("rule34"),
-  v.literal("umineko"),
-  v.literal("bernkastel"),
-  v.literal("lambdadelta"),
-  v.literal("beatrice"),
-  v.literal("erika"),
-  v.literal("battler"),
-  v.literal("virgilia"),
-  v.literal("catppuccin"),
-  v.literal("danbooru"),
-  v.literal("light"),
-  v.literal("dark"),
-  v.literal("system"),
-);
-
-const themeIds = [
-  "kura",
-  "safebooru",
-  "rule34",
-  "umineko",
-  "bernkastel",
-  "lambdadelta",
-  "beatrice",
-  "erika",
-  "battler",
-  "virgilia",
-  "catppuccin",
-  "danbooru",
-] as const;
-
-const fontIds = ["system", "serif", "rounded", "mono", "hack"] as const;
-
-export type ThemeId = (typeof themeIds)[number];
-export type FontId = (typeof fontIds)[number];
-
-export function normalizeTheme(value: string | undefined): ThemeId {
-  if (value === "light") return "danbooru";
-  if (value === "dark" || value === "system" || value === undefined) return "kura";
-  return themeIds.includes(value as ThemeId) ? (value as ThemeId) : "kura";
+function unionOf<const T extends readonly [string, string, ...string[]]>(ids: T) {
+  const [first, second, ...rest] = ids;
+  return v.union(
+    v.literal(first),
+    v.literal(second),
+    ...(rest.map((id) => v.literal(id)) as [(typeof v.literal<T[number]>) extends never ? never : ReturnType<typeof v.literal>]),
+  );
 }
 
-export function normalizeFont(value: string | undefined): FontId {
-  return fontIds.includes(value as FontId) ? (value as FontId) : "system";
-}
+export const theme = unionOf(themeIds);
+export const font = unionOf(fontIds);
+export const storedTheme = unionOf(storedThemeIds);
 
-export function normalizeTags(tags: string[], max = 20) {
-  const out: string[] = [];
-  for (const raw of tags) {
-    const tag = raw
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_:-]/g, "")
-      .slice(0, 48);
-    if (!tag || out.includes(tag)) continue;
-    out.push(tag);
-    if (out.length >= max) break;
-  }
-  return out;
-}
+export const postCard = v.object({
+  _id: v.id("posts"),
+  storageKey: v.string(),
+  thumbKey: v.union(v.string(), v.null()),
+  contentType: v.string(),
+  byteSize: v.number(),
+  width: v.number(),
+  height: v.number(),
+  artist: v.string(),
+  source: v.string(),
+  caption: v.string(),
+  rating,
+  createdAt: v.number(),
+  tags: v.array(v.string()),
+  safebooruId: v.union(v.number(), v.null()),
+  favorite: v.boolean(),
+});
+
+export const postDetail = v.object({
+  _id: v.id("posts"),
+  storageKey: v.string(),
+  thumbKey: v.union(v.string(), v.null()),
+  contentType: v.string(),
+  byteSize: v.number(),
+  width: v.number(),
+  height: v.number(),
+  originalName: v.string(),
+  artist: v.string(),
+  source: v.string(),
+  caption: v.string(),
+  rating,
+  createdAt: v.number(),
+  tags: v.array(v.string()),
+  safebooruId: v.union(v.number(), v.null()),
+  favorite: v.boolean(),
+  mine: v.boolean(),
+});
+
+export const tagCount = v.object({
+  tag: v.string(),
+  count: v.number(),
+});
+
+export const preferenceResult = v.object({
+  displayName: v.string(),
+  bio: v.string(),
+  location: v.string(),
+  website: v.string(),
+  theme,
+  font,
+  showSensitive: v.boolean(),
+  includeTags: v.array(v.string()),
+  excludeTags: v.array(v.string()),
+  signedIn: v.boolean(),
+});
 
 export function clip(value: string, max: number) {
   return value.trim().slice(0, max);

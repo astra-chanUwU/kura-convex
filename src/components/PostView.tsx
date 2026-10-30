@@ -1,15 +1,26 @@
 import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Heart, Trash2 } from "lucide-react";
-import type { ReactNode } from "react";
+import { Component, type ReactNode, useState } from "react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { errorText } from "@/lib/errors";
 import { formatBytes, imageUrl, tagLabel } from "@/lib/images";
 import { cn } from "@/lib/utils";
 
 export function PostView({ id, back }: { id: string; back: string }) {
+  return (
+    <PostErrorBoundary key={id} fallback={<p className="p-8">That picture is not on the board.</p>}>
+      <PostBody id={id as Id<"posts">} back={back} />
+    </PostErrorBoundary>
+  );
+}
+
+function PostBody({ id, back }: { id: Id<"posts">; back: string }) {
   const post = useQuery(api.posts.get, { id });
   const toggle = useMutation(api.posts.toggleFavorite);
   const remove = useMutation(api.posts.remove);
+  const [error, setError] = useState("");
 
   if (post === undefined) return <p className="p-8 text-sm text-muted-foreground">Loading…</p>;
   if (!post) return <p className="p-8">That picture is not on the board.</p>;
@@ -52,8 +63,14 @@ export function PostView({ id, back }: { id: string; back: string }) {
           <Button
             variant={post.favorite ? "accent" : "outline"}
             onClick={() => {
-              void toggle({ postId: post._id }).catch(() => {
-                window.location.hash = "#/auth";
+              setError("");
+              void toggle({ postId: post._id }).catch((caught) => {
+                const text = errorText(caught, "Could not save that picture.");
+                if (text === "Sign in to do that.") {
+                  window.location.hash = "#/auth";
+                  return;
+                }
+                setError(text);
               });
             }}
           >
@@ -65,9 +82,12 @@ export function PostView({ id, back }: { id: string; back: string }) {
               variant="outline"
               onClick={() => {
                 if (!window.confirm("Remove this picture from the board?")) return;
-                void remove({ postId: post._id }).then(() => {
-                  window.location.hash = back;
-                });
+                setError("");
+                void remove({ postId: post._id })
+                  .then(() => {
+                    window.location.hash = back;
+                  })
+                  .catch((caught) => setError(errorText(caught, "Could not remove that picture.")));
               }}
             >
               <Trash2 className="size-4" />
@@ -75,6 +95,7 @@ export function PostView({ id, back }: { id: string; back: string }) {
             </Button>
           )}
         </div>
+        {error && <p className="m-0 text-sm text-danger">{error}</p>}
         {post.tags.length > 0 && (
           <Detail label="Tags">
             <div className="flex flex-wrap gap-1.5">
@@ -102,4 +123,16 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
       <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
+}
+
+class PostErrorBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
 }

@@ -1,35 +1,9 @@
-export type ThemeId =
-  | "kura"
-  | "safebooru"
-  | "rule34"
-  | "umineko"
-  | "bernkastel"
-  | "lambdadelta"
-  | "beatrice"
-  | "erika"
-  | "battler"
-  | "virgilia"
-  | "catppuccin"
-  | "danbooru";
+import { fontIds, themeIds, type FontId, type ThemeId } from "../../shared/appearance";
 
-export type FontId = "system" | "serif" | "rounded" | "mono" | "hack";
+export { normalizeFont, normalizeTheme, type FontId, type ThemeId } from "../../shared/appearance";
 
-export const THEMES: ThemeId[] = [
-  "kura",
-  "safebooru",
-  "rule34",
-  "umineko",
-  "bernkastel",
-  "lambdadelta",
-  "beatrice",
-  "erika",
-  "battler",
-  "virgilia",
-  "catppuccin",
-  "danbooru",
-];
-
-export const FONTS: FontId[] = ["system", "serif", "rounded", "mono", "hack"];
+export const THEMES: ThemeId[] = [...themeIds];
+export const FONTS: FontId[] = [...fontIds];
 
 export const THEME_LABELS: Record<ThemeId, string> = {
   kura: "Kura Dark",
@@ -71,13 +45,3 @@ export const FONT_LABELS: Record<FontId, string> = {
 
 export const DEFAULT_THEME: ThemeId = "kura";
 export const DEFAULT_FONT: FontId = "system";
-
-export function normalizeTheme(value: unknown): ThemeId {
-  if (value === "light") return "danbooru";
-  if (value === "dark" || value === "system") return "kura";
-  return THEMES.includes(value as ThemeId) ? (value as ThemeId) : DEFAULT_THEME;
-}
-
-export function normalizeFont(value: unknown): FontId {
-  return FONTS.includes(value as FontId) ? (value as FontId) : DEFAULT_FONT;
-}

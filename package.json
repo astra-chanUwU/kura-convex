@@ -15,7 +15,9 @@
     "check": "pnpm lint && pnpm typecheck && pnpm build",
     "preview": "vite preview --host 127.0.0.1 --port 5175",
     "s3": "node scripts/s3.mjs",
-    "seed": "node scripts/seed-safebooru.mjs"
+    "thumbs": "node scripts/thumbnails.mjs",
+    "seed": "node scripts/seed-safebooru.mjs",
+    "migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1159.0",

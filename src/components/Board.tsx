@@ -1,10 +1,9 @@
-import { useMutation, useQuery } from "convex/react";
-import { ArrowUp, Heart, Search, Sparkles, Upload } from "lucide-react";
+import { usePaginatedQuery, useQuery } from "convex/react";
+import { ArrowUp, Search, Sparkles, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
+import { Picture, PictureRow } from "@/components/BoardPictures";
 import { Button } from "@/components/ui/button";
-import { authClient } from "@/lib/auth-client";
 import {
   writeBoard,
   type BoardFilter,
@@ -15,23 +14,10 @@ import {
   sameTags,
   splitTagInput,
 } from "@/lib/board";
-import { formatBytes, imageUrl, tagLabel } from "@/lib/images";
+import { tagLabel } from "@/lib/images";
 import { cn } from "@/lib/utils";
 
-type Post = {
-  _id: Id<"posts">;
-  storageKey: string;
-  contentType: string;
-  byteSize: number;
-  width: number;
-  height: number;
-  caption: string;
-  artist: string;
-  tags: string[];
-  createdAt: number;
-  favorite: boolean;
-  rating: "safe" | "questionable" | "explicit";
-};
+const pageSize = 48;
 
 export function Board({
   filter,
@@ -48,8 +34,6 @@ export function Board({
   onView: (view: BoardView) => void;
   onUpload: () => void;
 }) {
-  const [cursor, setCursor] = useState<number | undefined>(undefined);
-  const [items, setItems] = useState<Post[]>([]);
   const [text, setText] = useState(filter.q);
   const [stagedTags, setStagedTags] = useState(filter.tags);
   const [stagedExclude, setStagedExclude] = useState(filter.exclude);
@@ -57,26 +41,23 @@ export function Board({
   const [highlight, setHighlight] = useState(0);
   const [showTop, setShowTop] = useState(false);
   const sentinel = useRef<HTMLDivElement>(null);
-  const page = useQuery(api.posts.list, {
+  const listArgs = {
     q: filter.q || undefined,
     tags: filter.tags.length > 0 ? filter.tags : undefined,
     exclude: filter.exclude.length > 0 ? filter.exclude : undefined,
     sort: filter.sort,
-    before: cursor,
     saved,
-  });
+  };
+  const { results: items, status, loadMore } = usePaginatedQuery(api.posts.list, listArgs, { initialNumItems: pageSize });
   const suggestQuery = text.trim().replace(/^-/, "");
   const suggestions = useQuery(api.posts.suggest, focused && suggestQuery ? { q: suggestQuery } : "skip") ?? [];
   const offered = suggestions.filter((item) => !stagedTags.includes(item.tag) && !stagedExclude.includes(item.tag));
+  const relevant = filter.q !== "" && filter.tags.length === 0;
 
   useEffect(() => {
-    if (!page) return;
-    setItems((current) => {
-      if (cursor === undefined) return page;
-      const seen = new Set(current.map((post) => post._id));
-      return [...current, ...page.filter((post) => !seen.has(post._id))];
-    });
-  }, [page, cursor]);
+    if (status !== "CanLoadMore" || items.length >= pageSize) return;
+    loadMore(pageSize);
+  }, [status, items.length, loadMore]);
 
   useEffect(() => {
     const onScroll = () => setShowTop(window.scrollY > 600);
@@ -85,21 +66,18 @@ export function Board({
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const hasMore = (page?.length ?? 0) >= 48;
   useEffect(() => {
     const node = sentinel.current;
-    if (!node || !hasMore) return;
+    if (!node || status !== "CanLoadMore" || items.length < pageSize) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (!entries.some((entry) => entry.isIntersecting)) return;
-        const last = items.at(-1);
-        if (last) setCursor((current) => (current === last.createdAt ? current : last.createdAt));
+        if (entries.some((entry) => entry.isIntersecting)) loadMore(pageSize);
       },
       { rootMargin: "900px" },
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, items]);
+  }, [status, items.length, loadMore]);
 
   const viewportTags = useMemo(() => {
     const counts = new Map<string, number>();
@@ -164,8 +142,8 @@ export function Board({
     });
   }
 
-  const loading = page === undefined && items.length === 0;
-  const empty = page !== undefined && items.length === 0;
+  const loading = status === "LoadingFirstPage" || (items.length === 0 && status !== "Exhausted");
+  const empty = status === "Exhausted" && items.length === 0;
 
   return (
     <div>
@@ -287,12 +265,18 @@ export function Board({
             )}
           </div>
           <Segment label="Sort">
-            <SegmentButton active={filter.sort === "newest"} onClick={() => commit({ ...filter, sort: "newest" })}>
-              Newest
-            </SegmentButton>
-            <SegmentButton active={filter.sort === "oldest"} onClick={() => commit({ ...filter, sort: "oldest" })}>
-              Oldest
-            </SegmentButton>
+            {relevant ? (
+              <span className="bg-surface px-2 py-1.5 text-[0.8rem] text-muted-foreground">Relevant</span>
+            ) : (
+              <>
+                <SegmentButton active={filter.sort === "newest"} onClick={() => commit({ ...filter, sort: "newest" })}>
+                  Newest
+                </SegmentButton>
+                <SegmentButton active={filter.sort === "oldest"} onClick={() => commit({ ...filter, sort: "oldest" })}>
+                  Oldest
+                </SegmentButton>
+              </>
+            )}
           </Segment>
           <div className="ml-auto flex flex-wrap items-center gap-2 max-[700px]:ml-0">
             <div className="max-[700px]:hidden">
@@ -430,6 +414,9 @@ export function Board({
         </div>
       )}
       <div ref={sentinel} className="h-8" />
+      {status === "LoadingMore" && items.length > 0 && (
+        <p className="py-4 text-center text-sm text-muted-foreground">Loading more…</p>
+      )}
       {showTop && (
         <button
           type="button"
@@ -500,96 +487,5 @@ function SegmentButton({
     >
       {children}
     </button>
-  );
-}
-
-function Picture({ post, href }: { post: Post; href: string }) {
-  return (
-    <a href={href} className="relative block overflow-hidden rounded-xl border border-border bg-surface-soft">
-      <img
-        src={imageUrl(post.storageKey)}
-        alt={post.caption || post.artist || "Picture"}
-        className="aspect-[4/3] w-full object-cover"
-        loading="lazy"
-      />
-      <SaveButton post={post} />
-      {post.rating !== "safe" && <RatingBadge rating={post.rating} />}
-    </a>
-  );
-}
-
-function PictureRow({ post, href, onTag }: { post: Post; href: string; onTag: (tag: string) => void }) {
-  return (
-    <article className="flex min-w-0 gap-4 rounded-xl border border-border bg-surface p-3 max-[640px]:flex-col">
-      <a href={href} className="block w-60 shrink-0 overflow-hidden rounded-md bg-surface-soft max-[640px]:w-full" aria-label="Open post">
-        <img src={imageUrl(post.storageKey)} alt="" className="h-[10.5rem] w-full object-cover max-[640px]:h-52" loading="lazy" />
-      </a>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-start justify-between gap-3">
-          <p className="m-0 font-bold break-words">{post.artist || post.caption || "Unknown artist"}</p>
-          <SaveButton post={post} inline />
-        </div>
-        <p className="m-0 text-sm text-muted-foreground">
-          <span className={post.rating === "safe" ? "font-bold" : "font-bold text-danger"}>{post.rating.toUpperCase()}</span>
-          {" · "}
-          {post.width}×{post.height} · {formatBytes(post.byteSize)}
-        </p>
-        {post.tags.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {post.tags.slice(0, 16).map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => onTag(tag)}
-                className="cursor-pointer rounded-full border border-border-strong bg-surface-soft px-2 py-0.5 text-[0.78rem] hover:bg-selection"
-              >
-                {tagLabel(tag)}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </article>
-  );
-}
-
-function SaveButton({ post, inline }: { post: Post; inline?: boolean }) {
-  const toggle = useMutation(api.posts.toggleFavorite);
-  const session = authClient.useSession();
-  const [saved, setSaved] = useState(post.favorite);
-  useEffect(() => setSaved(post.favorite), [post.favorite]);
-  return (
-    <button
-      type="button"
-      aria-pressed={saved}
-      aria-label={saved ? "Remove from saved" : "Save"}
-      title="Saved pictures stay on your account"
-      className={cn(
-        "cursor-pointer rounded-md border border-border-strong bg-surface px-2 py-1 text-[0.8rem]",
-        !inline && "absolute top-2 right-2",
-        saved && "border-accent text-accent",
-      )}
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!session.data?.user) {
-          window.location.hash = "#/auth";
-          return;
-        }
-        setSaved((value) => !value);
-        void toggle({ postId: post._id }).catch(() => setSaved(post.favorite));
-      }}
-    >
-      <Heart className={cn("mr-1 inline size-3.5", saved && "fill-current")} />
-      {saved ? "Saved" : "Save"}
-    </button>
-  );
-}
-
-function RatingBadge({ rating }: { rating: Post["rating"] }) {
-  return (
-    <span className="absolute bottom-2 left-2 rounded-sm bg-danger px-1.5 py-0.5 text-[0.68rem] font-bold tracking-wide text-[#1c0d0d] uppercase">
-      {rating === "explicit" ? "Explicit" : "Sensitive"}
-    </span>
   );
 }

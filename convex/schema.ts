@@ -2,10 +2,13 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { font, rating, storedTheme } from "./validators";
 
-// Image bytes live in MinIO. These tables store keys and metadata only.
+// Image bytes live in object storage. These tables store keys and metadata only.
+// thumbKey is a WebP used by the board. storageKey is the original, used on the post page.
 export default defineSchema({
   posts: defineTable({
     storageKey: v.string(),
+    thumbKey: v.optional(v.string()),
+    searchText: v.optional(v.string()),
     contentType: v.string(),
     byteSize: v.number(),
     width: v.number(),
@@ -21,16 +24,22 @@ export default defineSchema({
     tags: v.array(v.string()),
   })
     .index("by_createdAt", ["createdAt"])
+    .index("by_rating_createdAt", ["rating", "createdAt"])
     .index("by_storageKey", ["storageKey"])
     .index("by_safebooruId", ["safebooruId"])
-    .index("by_author", ["authorId"]),
+    .index("by_author", ["authorId"])
+    .searchIndex("search_posts", {
+      searchField: "searchText",
+      filterFields: ["rating"],
+    }),
 
   postTags: defineTable({
     postId: v.id("posts"),
     tag: v.string(),
+    createdAt: v.optional(v.number()),
   })
     .index("by_post", ["postId"])
-    .index("by_tag", ["tag"]),
+    .index("by_tag_createdAt", ["tag", "createdAt"]),
 
   tagStats: defineTable({
     tag: v.string(),
@@ -42,8 +51,10 @@ export default defineSchema({
   favorites: defineTable({
     userId: v.string(),
     postId: v.id("posts"),
+    createdAt: v.optional(v.number()),
   })
     .index("by_user_post", ["userId", "postId"])
+    .index("by_user_createdAt", ["userId", "createdAt"])
     .index("by_post", ["postId"]),
 
   preferences: defineTable({

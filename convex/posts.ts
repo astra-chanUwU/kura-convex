@@ -1,11 +1,13 @@
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
+import { thumbKeyFor } from "../shared/storage";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { optionalUserId, requireUserId } from "./authz";
-import { normalizeTags, rating } from "./validators";
-
-const pageSize = 48;
+import { deletePostGraph, searchTextFor, writeTags } from "./records";
+import { normalizeTag, normalizeTags, postCard, postDetail, rating, tagCount } from "./validators";
 
 async function viewerFilter(ctx: QueryCtx) {
   const userId = await optionalUserId(ctx);
@@ -21,183 +23,138 @@ async function viewerFilter(ctx: QueryCtx) {
   };
 }
 
-function visible(
-  post: { rating: "safe" | "questionable" | "explicit" },
-  filter: { showSensitive: boolean },
-) {
-  return filter.showSensitive || post.rating === "safe";
-}
-
-function matchesQuery(
+function matches(
   post: Doc<"posts">,
+  showSensitive: boolean,
   include: string[],
   exclude: string[],
   needle: string,
 ) {
+  if (!showSensitive && post.rating !== "safe") return false;
   if (include.some((tag) => !post.tags.includes(tag))) return false;
   if (exclude.some((tag) => post.tags.includes(tag))) return false;
   if (!needle) return true;
-  if (post.tags.includes(needle)) return true;
-  return `${post.caption} ${post.artist} ${post.source} ${post.originalName} ${post.tags.join(" ")}`
-    .toLowerCase()
-    .includes(needle);
+  return (post.searchText ?? searchTextFor(post)).includes(needle);
+}
+
+function toCard(post: Doc<"posts">, favorite: boolean) {
+  return {
+    _id: post._id,
+    storageKey: post.storageKey,
+    thumbKey: post.thumbKey ?? null,
+    contentType: post.contentType,
+    byteSize: post.byteSize,
+    width: post.width,
+    height: post.height,
+    artist: post.artist,
+    source: post.source,
+    caption: post.caption,
+    rating: post.rating,
+    createdAt: post.createdAt,
+    tags: post.tags,
+    safebooruId: post.safebooruId ?? null,
+    favorite,
+  };
+}
+
+async function favoriteFlag(ctx: QueryCtx, userId: string | null, postId: Id<"posts">) {
+  if (!userId) return false;
+  const row = await ctx.db
+    .query("favorites")
+    .withIndex("by_user_post", (q) => q.eq("userId", userId).eq("postId", postId))
+    .unique();
+  return row !== null;
 }
 
 export const list = query({
   args: {
+    paginationOpts: paginationOptsValidator,
     q: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     exclude: v.optional(v.array(v.string())),
     sort: v.optional(v.union(v.literal("newest"), v.literal("oldest"))),
-    before: v.optional(v.number()),
     saved: v.optional(v.boolean()),
   },
+  returns: paginationResultValidator(postCard),
   handler: async (ctx, args) => {
     const filter = await viewerFilter(ctx);
     const include = normalizeTags(args.tags ?? [], 12);
     const exclude = normalizeTags(args.exclude ?? [], 12);
     const needle = (args.q ?? "").trim().toLowerCase();
     const oldest = args.sort === "oldest";
-    const favoriteIds = new Set<Id<"posts">>();
-    if (filter.userId) {
-      const favs = await ctx.db
+    const order = oldest ? "asc" : "desc";
+
+    if (args.saved) {
+      const userId = filter.userId ?? "";
+      const result = await ctx.db
         .query("favorites")
-        .withIndex("by_user_post", (q) => q.eq("userId", filter.userId!))
-        .take(500);
-      for (const fav of favs) favoriteIds.add(fav.postId);
+        .withIndex("by_user_createdAt", (q) => q.eq("userId", userId))
+        .order(order)
+        .paginate(args.paginationOpts);
+      const page = [];
+      for (const fav of result.page) {
+        const post = await ctx.db.get(fav.postId);
+        if (!post || !matches(post, filter.showSensitive, include, exclude, needle)) continue;
+        page.push(toCard(post, true));
+      }
+      return { ...result, page };
     }
 
-    const page: Array<{
-      _id: Id<"posts">;
-      storageKey: string;
-      contentType: string;
-      byteSize: number;
-      width: number;
-      height: number;
-      artist: string;
-      source: string;
-      caption: string;
-      rating: "safe" | "questionable" | "explicit";
-      createdAt: number;
-      tags: string[];
-      safebooruId: number | null;
-      favorite: boolean;
-    }> = [];
-    let cursor = args.before;
-    for (let round = 0; round < 4 && page.length < pageSize; round++) {
-      const batch = args.saved
-        ? await savedPosts(ctx, filter.userId, cursor, oldest)
-        : include[0]
-          ? await taggedPosts(ctx, include[0], cursor, oldest)
-          : await recentPosts(ctx, cursor, oldest);
-      if (batch.length === 0) break;
-      for (const post of batch) {
-        if (!visible(post, filter) || !matchesQuery(post, include, exclude, needle)) continue;
-        page.push({
-          _id: post._id,
-          storageKey: post.storageKey,
-          contentType: post.contentType,
-          byteSize: post.byteSize,
-          width: post.width,
-          height: post.height,
-          artist: post.artist,
-          source: post.source,
-          caption: post.caption,
-          rating: post.rating,
-          createdAt: post.createdAt,
-          tags: post.tags,
-          safebooruId: post.safebooruId ?? null,
-          favorite: favoriteIds.has(post._id),
-        });
-        if (page.length >= pageSize) break;
+    if (include[0]) {
+      const result = await ctx.db
+        .query("postTags")
+        .withIndex("by_tag_createdAt", (q) => q.eq("tag", include[0]!))
+        .order(order)
+        .paginate(args.paginationOpts);
+      const page = [];
+      for (const link of result.page) {
+        const post = await ctx.db.get(link.postId);
+        if (!post || !matches(post, filter.showSensitive, include, exclude, needle)) continue;
+        page.push(toCard(post, await favoriteFlag(ctx, filter.userId, post._id)));
       }
-      const edge = batch[batch.length - 1]?.createdAt;
-      if (edge === undefined || edge === cursor) break;
-      cursor = edge;
-      if (args.saved) break;
+      return { ...result, page };
     }
-    return page;
+
+    if (needle) {
+      const result = await ctx.db
+        .query("posts")
+        .withSearchIndex("search_posts", (q) => {
+          const searched = q.search("searchText", needle);
+          return filter.showSensitive ? searched : searched.eq("rating", "safe");
+        })
+        .paginate(args.paginationOpts);
+      const page = [];
+      for (const post of result.page) {
+        if (!matches(post, filter.showSensitive, include, exclude, needle)) continue;
+        page.push(toCard(post, await favoriteFlag(ctx, filter.userId, post._id)));
+      }
+      return { ...result, page };
+    }
+
+    const recent = filter.showSensitive
+      ? ctx.db.query("posts").withIndex("by_createdAt")
+      : ctx.db.query("posts").withIndex("by_rating_createdAt", (q) => q.eq("rating", "safe"));
+    const result = await recent.order(order).paginate(args.paginationOpts);
+    const page = [];
+    for (const post of result.page) {
+      if (!matches(post, filter.showSensitive, include, exclude, "")) continue;
+      page.push(toCard(post, await favoriteFlag(ctx, filter.userId, post._id)));
+    }
+    return { ...result, page };
   },
 });
 
-function inPage(createdAt: number, cursor: number | undefined, oldest: boolean) {
-  if (cursor === undefined) return true;
-  return oldest ? createdAt > cursor : createdAt < cursor;
-}
-
-async function savedPosts(ctx: QueryCtx, userId: string | null, cursor: number | undefined, oldest: boolean) {
-  if (!userId) return [];
-  const favs = await ctx.db
-    .query("favorites")
-    .withIndex("by_user_post", (q) => q.eq("userId", userId))
-    .take(300);
-  const posts: Doc<"posts">[] = [];
-  for (const fav of favs) {
-    const post = await ctx.db.get(fav.postId);
-    if (!post || !inPage(post.createdAt, cursor, oldest)) continue;
-    posts.push(post);
-  }
-  posts.sort((a, b) => (oldest ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
-  return posts;
-}
-
-async function recentPosts(ctx: QueryCtx, cursor: number | undefined, oldest: boolean) {
-  return ctx.db
-    .query("posts")
-    .withIndex("by_createdAt", (q) => {
-      if (cursor === undefined) return q;
-      return oldest ? q.gt("createdAt", cursor) : q.lt("createdAt", cursor);
-    })
-    .order(oldest ? "asc" : "desc")
-    .take(160);
-}
-
-async function taggedPosts(ctx: QueryCtx, tag: string, cursor: number | undefined, oldest: boolean) {
-  const links = await ctx.db
-    .query("postTags")
-    .withIndex("by_tag", (q) => q.eq("tag", tag))
-    .take(400);
-  const posts: Doc<"posts">[] = [];
-  for (const link of links) {
-    const post = await ctx.db.get(link.postId);
-    if (!post || !inPage(post.createdAt, cursor, oldest)) continue;
-    posts.push(post);
-  }
-  posts.sort((a, b) => (oldest ? a.createdAt - b.createdAt : b.createdAt - a.createdAt));
-  return posts.slice(0, 160);
-}
-
 export const get = query({
-  args: { id: v.string() },
+  args: { id: v.id("posts") },
+  returns: v.union(postDetail, v.null()),
   handler: async (ctx, args) => {
-    const id = ctx.db.normalizeId("posts", args.id);
-    if (!id) return null;
-    const post = await ctx.db.get(id);
+    const post = await ctx.db.get(args.id);
     if (!post) return null;
     const filter = await viewerFilter(ctx);
-    if (!visible(post, filter)) return null;
-    const favorite = filter.userId
-      ? await ctx.db
-          .query("favorites")
-          .withIndex("by_user_post", (q) => q.eq("userId", filter.userId!).eq("postId", id))
-          .unique()
-      : null;
+    if (!matches(post, filter.showSensitive, [], [], "")) return null;
     return {
-      _id: post._id,
-      storageKey: post.storageKey,
-      contentType: post.contentType,
-      byteSize: post.byteSize,
-      width: post.width,
-      height: post.height,
+      ...toCard(post, await favoriteFlag(ctx, filter.userId, post._id)),
       originalName: post.originalName,
-      artist: post.artist,
-      source: post.source,
-      caption: post.caption,
-      rating: post.rating,
-      createdAt: post.createdAt,
-      tags: post.tags,
-      safebooruId: post.safebooruId ?? null,
-      favorite: favorite !== null,
       mine: filter.userId !== null && filter.userId === post.authorId,
     };
   },
@@ -205,6 +162,7 @@ export const get = query({
 
 export const tags = query({
   args: {},
+  returns: v.array(tagCount),
   handler: async (ctx) => {
     const rows = await ctx.db.query("tagStats").withIndex("by_count").order("desc").take(24);
     return rows.map((row) => ({ tag: row.tag, count: row.count }));
@@ -213,19 +171,29 @@ export const tags = query({
 
 export const suggest = query({
   args: { q: v.string() },
+  returns: v.array(tagCount),
   handler: async (ctx, args) => {
-    const needle = normalizeTags([args.q.replace(/^-/, "")], 1)[0];
+    const needle = normalizeTag(args.q.replace(/^-/, ""));
     if (!needle) return [];
-    const rows = await ctx.db.query("tagStats").withIndex("by_count").order("desc").take(300);
-    return rows
-      .filter((row) => row.tag.includes(needle))
-      .slice(0, 8)
-      .map((row) => ({ tag: row.tag, count: row.count }));
+    const upper = needle.slice(0, -1) + String.fromCharCode(needle.charCodeAt(needle.length - 1) + 1);
+    const prefixed = await ctx.db
+      .query("tagStats")
+      .withIndex("by_tag", (q) => q.gte("tag", needle).lt("tag", upper))
+      .take(8);
+    const seen = new Set(prefixed.map((row) => row.tag));
+    const extra =
+      prefixed.length >= 8
+        ? []
+        : (
+            await ctx.db.query("tagStats").withIndex("by_count").order("desc").take(80)
+          ).filter((row) => row.tag.includes(needle) && !seen.has(row.tag));
+    return [...prefixed, ...extra].slice(0, 8).map((row) => ({ tag: row.tag, count: row.count }));
   },
 });
 
 export const toggleFavorite = mutation({
   args: { postId: v.id("posts") },
+  returns: v.boolean(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await ctx.db.get(args.postId);
@@ -238,46 +206,30 @@ export const toggleFavorite = mutation({
       await ctx.db.delete(existing._id);
       return false;
     }
-    await ctx.db.insert("favorites", { userId, postId: args.postId });
+    await ctx.db.insert("favorites", { userId, postId: args.postId, createdAt: post.createdAt });
     return true;
   },
 });
 
 export const remove = mutation({
   args: { postId: v.id("posts") },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await ctx.db.get(args.postId);
     if (!post) return null;
     if (post.authorId !== userId) throw new ConvexError("You can only remove your own pictures.");
-    const tags = await ctx.db
-      .query("postTags")
-      .withIndex("by_post", (q) => q.eq("postId", args.postId))
-      .take(80);
-    for (const tag of tags) {
-      await ctx.db.delete(tag._id);
-      const stat = await ctx.db
-        .query("tagStats")
-        .withIndex("by_tag", (q) => q.eq("tag", tag.tag))
-        .unique();
-      if (stat) {
-        if (stat.count <= 1) await ctx.db.delete(stat._id);
-        else await ctx.db.patch(stat._id, { count: stat.count - 1 });
-      }
-    }
-    const favs = await ctx.db
-      .query("favorites")
-      .withIndex("by_post", (q) => q.eq("postId", args.postId))
-      .take(100);
-    for (const fav of favs) await ctx.db.delete(fav._id);
-    await ctx.db.delete(args.postId);
-    return post.storageKey;
+    const keys = [post.storageKey, post.thumbKey].filter((key): key is string => Boolean(key));
+    await deletePostGraph(ctx, args.postId);
+    await ctx.scheduler.runAfter(0, internal.storage.deleteStored, { keys });
+    return null;
   },
 });
 
 export const insertUploaded = internalMutation({
   args: {
     storageKey: v.string(),
+    thumbKey: v.optional(v.string()),
     contentType: v.string(),
     byteSize: v.number(),
     width: v.number(),
@@ -290,8 +242,11 @@ export const insertUploaded = internalMutation({
     tags: v.array(v.string()),
     authorId: v.string(),
   },
+  returns: v.id("posts"),
   handler: async (ctx, args) => {
-    const userId = args.authorId;
+    if (args.thumbKey !== undefined && args.thumbKey !== thumbKeyFor(args.storageKey)) {
+      throw new ConvexError("That upload is not a picture we signed.");
+    }
     const existing = await ctx.db
       .query("posts")
       .withIndex("by_storageKey", (q) => q.eq("storageKey", args.storageKey))
@@ -299,8 +254,10 @@ export const insertUploaded = internalMutation({
     if (existing) return existing._id;
     const tags = normalizeTags(args.tags);
     const source = clipSource(args.source);
-    const id = await ctx.db.insert("posts", {
+    const createdAt = Date.now();
+    const fields = {
       storageKey: args.storageKey,
+      ...(args.thumbKey ? { thumbKey: args.thumbKey } : {}),
       contentType: args.contentType,
       byteSize: args.byteSize,
       width: args.width,
@@ -310,19 +267,12 @@ export const insertUploaded = internalMutation({
       source,
       caption: clipText(args.caption, 500),
       rating: args.rating,
-      createdAt: Date.now(),
-      authorId: userId,
+      createdAt,
+      authorId: args.authorId,
       tags,
-    });
-    for (const tag of tags) {
-      await ctx.db.insert("postTags", { postId: id, tag });
-      const stat = await ctx.db
-        .query("tagStats")
-        .withIndex("by_tag", (q) => q.eq("tag", tag))
-        .unique();
-      if (stat) await ctx.db.patch(stat._id, { count: stat.count + 1 });
-      else await ctx.db.insert("tagStats", { tag, count: 1 });
-    }
+    };
+    const id = await ctx.db.insert("posts", { ...fields, searchText: searchTextFor(fields) });
+    await writeTags(ctx, id, tags, createdAt);
     return id;
   },
 });

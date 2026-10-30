@@ -1,9 +1,11 @@
 import { useAction } from "convex/react";
-import { ImagePlus, X } from "lucide-react";
+import { ImagePlus } from "lucide-react";
 import { useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { errorText } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
 const TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -53,32 +55,20 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
       onClose();
       window.location.hash = `#/posts/${id}`;
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Upload failed.");
+      setError(errorText(caught, "Upload failed."));
       setPending(false);
     }
   }
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/60 p-4" onMouseDown={onClose}>
-      <form
-        onSubmit={(event) => void submit(event)}
-        onMouseDown={(event) => event.stopPropagation()}
-        className="w-full max-w-lg rounded-xl border border-border bg-surface p-5"
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="m-0 text-xl font-semibold">Add a picture</h2>
-            <p className="mt-1 mb-0 text-sm text-muted-foreground">JPEG, PNG, WebP, or GIF, under 20 MB.</p>
-          </div>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="cursor-pointer rounded-md p-1 text-muted-foreground hover:bg-surface-soft hover:text-foreground"
-          >
-            <X className="size-4" />
-          </button>
-        </div>
+    <Dialog
+      open
+      onClose={onClose}
+      title="Add a picture"
+      description="JPEG, PNG, WebP, or GIF, under 20 MB. A smaller copy is added for the board."
+      className="max-w-lg"
+    >
+      <form onSubmit={(event) => void submit(event)}>
         <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border-strong bg-surface-soft px-4 py-8 text-center text-sm text-muted-foreground hover:border-accent">
           <ImagePlus className="mb-2 size-5" />
           {file ? file.name : "Drop a picture here, or browse"}
@@ -134,7 +124,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
           </Button>
         </div>
       </form>
-    </div>
+    </Dialog>
   );
 }
 

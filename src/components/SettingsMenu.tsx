@@ -3,13 +3,16 @@ import { Settings } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { errorText } from "@/lib/errors";
 
 export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
   const prefs = useQuery(api.preferences.get);
   const save = useMutation(api.preferences.save);
   const [open, setOpen] = useState(false);
   const [askAge, setAskAge] = useState(false);
+  const [error, setError] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,7 +34,9 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
       window.location.hash = "#/auth";
       return;
     }
-    await save({
+    setError("");
+    try {
+      await save({
       displayName: prefs.displayName,
       bio: prefs.bio,
       location: prefs.location,
@@ -43,6 +48,9 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
       excludeTags: prefs.excludeTags,
       ...partial,
     });
+    } catch (caught) {
+      setError(errorText(caught, "Could not save that setting."));
+    }
   }
 
   return (
@@ -84,30 +92,29 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
           </div>
         )}
       </div>
-      {askAge && (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-xl border border-border bg-surface p-5" role="dialog">
-            <h2 className="m-0 text-lg font-semibold">Are you over 18?</h2>
-            <p className="mt-2 mb-0 text-sm text-muted-foreground">
-              Sensitive pictures stay hidden until you confirm. Safebooru seeds are rated general.
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setAskAge(false)}>
-                Keep hidden
-              </Button>
-              <Button
-                variant="accent"
-                onClick={() => {
-                  setAskAge(false);
-                  void patch({ showSensitive: true });
-                }}
-              >
-                Yes, show them
-              </Button>
-            </div>
-          </div>
+      {error && <p className="m-0 text-xs text-danger">{error}</p>}
+      <Dialog
+        open={askAge}
+        onClose={() => setAskAge(false)}
+        title="Are you over 18?"
+        description="Sensitive pictures stay hidden until you confirm. Safebooru seeds are rated general."
+        className="max-w-sm"
+      >
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setAskAge(false)}>
+            Keep hidden
+          </Button>
+          <Button
+            variant="accent"
+            onClick={() => {
+              setAskAge(false);
+              void patch({ showSensitive: true });
+            }}
+          >
+            Yes, show them
+          </Button>
         </div>
-      )}
+      </Dialog>
     </div>
   );
 }

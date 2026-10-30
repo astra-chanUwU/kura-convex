@@ -1,4 +1,4 @@
-import { useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
 export function AuthCard({ mode }: { mode: "sign-in" | "sign-up" }) {
+  const auth = useConvexAuth();
   const user = useQuery(api.auth.getCurrentUser);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -17,7 +18,7 @@ export function AuthCard({ mode }: { mode: "sign-in" | "sign-up" }) {
 
   useEffect(() => {
     if (!waiting) return;
-    if (user) {
+    if (auth.isAuthenticated) {
       window.location.hash = "#/";
       return;
     }
@@ -26,7 +27,7 @@ export function AuthCard({ mode }: { mode: "sign-in" | "sign-up" }) {
       setError("That account was accepted, but Kura did not start a session. Try signing in again.");
     }, 8000);
     return () => window.clearTimeout(timer);
-  }, [waiting, user]);
+  }, [waiting, auth.isAuthenticated]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

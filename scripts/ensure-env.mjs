@@ -12,12 +12,13 @@ const values = Object.fromEntries(
   [...text.matchAll(/^([A-Z0-9_]+)='([^']*)'/gm)].map((match) => [match[1], match[2]]),
 );
 
+const thumbSecret = values.KURA_THUMB_SECRET || randomBytes(32).toString("hex");
 const additions = {
   VITE_CONVEX_SITE_URL: "http://127.0.0.1:3211",
   VITE_SITE_URL: "http://127.0.0.1:5175",
   VITE_S3_PUBLIC_URL: "http://127.0.0.1:9000/kura-images",
-  SEED_TOKEN: values.SEED_TOKEN || randomBytes(24).toString("hex"),
   BETTER_AUTH_SECRET: values.BETTER_AUTH_SECRET || randomBytes(32).toString("base64"),
+  KURA_THUMB_SECRET: thumbSecret,
 };
 
 let next = text;
@@ -30,12 +31,13 @@ if (next !== text) writeFileSync(path, next);
 const convexEnv = {
   SITE_URL: "http://127.0.0.1:5175",
   BETTER_AUTH_SECRET: additions.BETTER_AUTH_SECRET,
-  SEED_TOKEN: additions.SEED_TOKEN,
   KURA_S3_ENDPOINT: "http://host.docker.internal:9000",
   KURA_S3_PUBLIC_ENDPOINT: "http://127.0.0.1:9000",
   KURA_S3_BUCKET: "kura-images",
   KURA_S3_ACCESS_KEY_ID: "kura",
   KURA_S3_SECRET_ACCESS_KEY: "kura-secret-key",
+  KURA_THUMB_URL: "http://thumbnails:8080",
+  KURA_THUMB_SECRET: thumbSecret,
 };
 for (const [key, value] of Object.entries(convexEnv)) {
   execFileSync("pnpm", ["exec", "convex", "env", "set", key, value], {

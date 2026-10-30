@@ -1,3 +1,5 @@
+import { normalizeTag } from "../../shared/tags";
+
 export type BoardSort = "newest" | "oldest";
 
 export type BoardFilter = {
@@ -24,11 +26,7 @@ export const EMPTY_FILTER: BoardFilter = {
 const VIEW_KEY = "kura-board-view";
 
 export function normalizeTagToken(raw: string) {
-  return raw
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "_")
-    .replace(/-/g, "_")
-    .replace(/^_+|_+$/g, "");
+  return normalizeTag(raw);
 }
 
 export function splitTagInput(text: string) {

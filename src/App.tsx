@@ -21,6 +21,7 @@ import {
   type BoardFilter,
   type BoardView,
 } from "@/lib/board";
+import { errorText } from "@/lib/errors";
 import { cn } from "@/lib/utils";
 
 type Route =
@@ -60,6 +61,7 @@ export default function App({ url }: { url: string }) {
 function Kura() {
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   const [upload, setUpload] = useState(false);
+  const [appearanceError, setAppearanceError] = useState("");
   const [view, setView] = useState<BoardView>(() => readBoardView());
   const prefs = useQuery(api.preferences.get);
   const account = useQuery(api.auth.getCurrentUser);
@@ -68,6 +70,7 @@ function Kura() {
   const persistAppearance = useCallback(
     (theme: ThemeId, font: FontId) => {
       if (!prefs?.signedIn) return;
+      setAppearanceError("");
       void save({
         displayName: prefs.displayName,
         bio: prefs.bio,
@@ -78,7 +81,9 @@ function Kura() {
         showSensitive: prefs.showSensitive,
         includeTags: prefs.includeTags,
         excludeTags: prefs.excludeTags,
-      }).catch(() => {});
+      }).catch((caught) => {
+        setAppearanceError(errorText(caught, "Could not save appearance."));
+      });
     },
     [prefs, save],
   );
@@ -151,6 +156,11 @@ function Kura() {
           <SettingsMenu onPreferences={() => (window.location.hash = "#/preferences")} />
         </div>
       </header>
+      {appearanceError && (
+        <p className="m-0 border-b border-border bg-surface px-[var(--page-x)] py-2 text-sm text-danger" role="alert">
+          {appearanceError}
+        </p>
+      )}
       <main
         id="main"
         tabIndex={-1}

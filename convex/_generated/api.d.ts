@@ -11,8 +11,10 @@
 import type * as auth from "../auth.js";
 import type * as authz from "../authz.js";
 import type * as http from "../http.js";
+import type * as maintenance from "../maintenance.js";
 import type * as posts from "../posts.js";
 import type * as preferences from "../preferences.js";
+import type * as records from "../records.js";
 import type * as seed from "../seed.js";
 import type * as site from "../site.js";
 import type * as storage from "../storage.js";
@@ -28,8 +30,10 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   authz: typeof authz;
   http: typeof http;
+  maintenance: typeof maintenance;
   posts: typeof posts;
   preferences: typeof preferences;
+  records: typeof records;
   seed: typeof seed;
   site: typeof site;
   storage: typeof storage;

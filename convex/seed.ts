@@ -1,17 +1,13 @@
-import { ConvexError, v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
-import { mutation, query } from "./_generated/server";
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
+import { v } from "convex/values";
+import { internalMutation, internalQuery } from "./_generated/server";
+import { searchTextFor, writeTags } from "./records";
 import { normalizeTags, rating } from "./validators";
-
-function expectedToken() {
-  return (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
-    ?.SEED_TOKEN;
-}
 
 const postValidator = v.object({
   safebooruId: v.number(),
   storageKey: v.string(),
+  thumbKey: v.optional(v.string()),
   contentType: v.string(),
   byteSize: v.number(),
   width: v.number(),
@@ -25,24 +21,22 @@ const postValidator = v.object({
   tags: v.array(v.string()),
 });
 
-export const existingSafebooruIds = query({
-  args: {},
-  handler: async (ctx) => {
-    const rows = await ctx.db.query("posts").withIndex("by_safebooruId").take(2000);
-    return rows.flatMap((row) => (row.safebooruId === undefined ? [] : [row.safebooruId]));
+export const existingSafebooruIds = internalQuery({
+  args: { paginationOpts: paginationOptsValidator },
+  returns: paginationResultValidator(v.number()),
+  handler: async (ctx, args) => {
+    const result = await ctx.db.query("posts").withIndex("by_safebooruId").paginate(args.paginationOpts);
+    return {
+      ...result,
+      page: result.page.flatMap((row) => (row.safebooruId === undefined ? [] : [row.safebooruId])),
+    };
   },
 });
 
-export const importBatch = mutation({
-  args: {
-    token: v.string(),
-    posts: v.array(postValidator),
-  },
+export const importBatch = internalMutation({
+  args: { posts: v.array(postValidator) },
+  returns: v.object({ inserted: v.number() }),
   handler: async (ctx, args) => {
-    const token = expectedToken();
-    if (!token || args.token !== token) {
-      throw new ConvexError("Seed is closed.");
-    }
     let inserted = 0;
     for (const post of args.posts) {
       const existing = await ctx.db
@@ -51,8 +45,9 @@ export const importBatch = mutation({
         .unique();
       if (existing) continue;
       const tags = normalizeTags(post.tags, 40);
-      const id = await ctx.db.insert("posts", {
+      const fields = {
         storageKey: post.storageKey,
+        thumbKey: post.thumbKey,
         contentType: post.contentType,
         byteSize: post.byteSize,
         width: post.width,
@@ -66,22 +61,11 @@ export const importBatch = mutation({
         authorId: "safebooru",
         safebooruId: post.safebooruId,
         tags,
-      });
-      await writeTags(ctx, id, tags);
+      };
+      const id = await ctx.db.insert("posts", { ...fields, searchText: searchTextFor(fields) });
+      await writeTags(ctx, id, tags, post.createdAt);
       inserted += 1;
     }
     return { inserted };
   },
 });
-
-async function writeTags(ctx: MutationCtx, postId: Id<"posts">, tags: string[]) {
-  for (const tag of tags) {
-    await ctx.db.insert("postTags", { postId, tag });
-    const stat = await ctx.db
-      .query("tagStats")
-      .withIndex("by_tag", (q) => q.eq("tag", tag))
-      .unique();
-    if (stat) await ctx.db.patch(stat._id, { count: stat.count + 1 });
-    else await ctx.db.insert("tagStats", { tag, count: 1 });
-  }
-}

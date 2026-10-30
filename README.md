@@ -40,10 +40,15 @@ Paste the admin key into the dashboard at http://127.0.0.1:6791.
 ```sh
 node scripts/ensure-env.mjs
 pnpm s3
+pnpm thumbs
 pnpm seed
 ```
 
-`pnpm s3` stores files under `D:\kura-minio\data` and listens on port 9000. `pnpm seed` pulls 1,200 general-rated Safebooru samples and skips ids that are already stored.
+`pnpm s3` stores files under `D:\kura-minio\data` and listens on port 9000. `pnpm thumbs` builds the Go thumbnail service and listens on port 5006. Convex calls that service after an upload. The service reads the original from MinIO and writes a 480px WebP beside it. The board uses the thumbnail. The post page uses the original. Until the thumbnail exists, the board shows the original.
+
+`pnpm seed` pulls 1,200 general-rated Safebooru samples, asks the thumbnail service for the small copy, and skips ids that are already stored. It calls the internal seed functions with the admin key.
+
+`pnpm migrate` fills search text and tag order on pictures already in Convex, then asks the thumbnail service for any picture that still has no thumbnail.
 
 ```sh
 pnpm dev

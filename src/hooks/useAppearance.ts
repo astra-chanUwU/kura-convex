@@ -47,17 +47,15 @@ export function useAppearance(
   const font = normalizeFont(serverFont);
   const serverKey = `${theme}:${font}`;
   const [seenServer, setSeenServer] = useState(serverKey);
+  if (signedIn && seenServer !== serverKey) {
+    setSeenServer(serverKey);
+    setOverride(null);
+  }
   const appearance = override ?? (signedIn ? { theme, font } : stored);
 
   useEffect(() => {
     applyAppearance(appearance.theme, appearance.font);
   }, [appearance.theme, appearance.font]);
-
-  useEffect(() => {
-    if (!signedIn || seenServer === serverKey) return;
-    setSeenServer(serverKey);
-    setOverride(null);
-  }, [signedIn, seenServer, serverKey]);
 
   const change = useCallback(
     (next: Partial<{ theme: ThemeId; font: FontId }>) => {

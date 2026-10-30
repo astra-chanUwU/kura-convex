@@ -9,6 +9,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi } from "convex/server";
+import { requestThumbnail } from "./thumb-client.mjs";
 
 const TARGET = Number(process.argv.find((arg) => arg.startsWith("--limit="))?.slice(8) ?? 1200);
 const MILESTONE = 400;
@@ -25,9 +26,9 @@ const SEARCHES = [
 
 const env = readEnv(".env.local");
 const convexUrl = env.VITE_CONVEX_URL ?? "http://127.0.0.1:3210";
-const seedToken = env.SEED_TOKEN;
-if (!seedToken) {
-  console.error("SEED_TOKEN is missing from .env.local. Run: node scripts/ensure-env.mjs");
+const adminKey = env.CONVEX_SELF_HOSTED_ADMIN_KEY;
+if (!adminKey) {
+  console.error("CONVEX_SELF_HOSTED_ADMIN_KEY is missing from .env.local.");
   process.exit(1);
 }
 
@@ -41,10 +42,11 @@ const s3 = new S3Client({
 });
 
 const convex = new ConvexHttpClient(convexUrl);
+convex.setAdminAuth(adminKey);
 
 await ensureBucket();
 const chosen = await collectPosts();
-const existing = new Set(await convex.query(anyApi.seed.existingSafebooruIds, {}));
+const existing = await existingSafebooruIds();
 console.log(`Safebooru pool ${chosen.length}. Already stored ${existing.size}. Target ${TARGET}.`);
 
 let stored = chosen.filter((post) => existing.has(post.id)).length;
@@ -79,11 +81,21 @@ function announce(count) {
   console.log(`Stored ${count}/${TARGET}`);
 }
 
+async function existingSafebooruIds() {
+  const ids = new Set();
+  let cursor = null;
+  for (;;) {
+    const page = await convex.query(anyApi.seed.existingSafebooruIds, {
+      paginationOpts: { numItems: 200, cursor },
+    });
+    for (const id of page.page) ids.add(id);
+    if (page.isDone) return ids;
+    cursor = page.continueCursor;
+  }
+}
+
 async function flush(posts) {
-  const result = await convex.mutation(anyApi.seed.importBatch, {
-    token: seedToken,
-    posts,
-  });
+  const result = await convex.mutation(anyApi.seed.importBatch, { posts });
   return result.inserted;
 }
 
@@ -162,9 +174,16 @@ async function download(post) {
         ContentType: contentType(ext),
       }),
     );
+    let thumbKey;
+    try {
+      thumbKey = (await requestThumbnail(storageKey, env)).thumbKey;
+    } catch (error) {
+      console.error(`Thumb ${post.id}: ${error instanceof Error ? error.message : error}`);
+    }
     return {
       safebooruId: post.id,
       storageKey,
+      ...(thumbKey ? { thumbKey } : {}),
       contentType: contentType(ext),
       byteSize: bytes.length,
       width: post.width,

@@ -1,7 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { optionalUserId, requireUserId } from "./authz";
-import { clip, font, normalizeFont, normalizeTags, normalizeTheme, theme } from "./validators";
+import { clip, font, normalizeFont, normalizeTags, normalizeTheme, preferenceResult, theme } from "./validators";
 
 const defaults = {
   displayName: "You",
@@ -17,6 +17,7 @@ const defaults = {
 
 export const get = query({
   args: {},
+  returns: preferenceResult,
   handler: async (ctx) => {
     const userId = await optionalUserId(ctx);
     if (!userId) return { ...defaults, signedIn: false as const };
@@ -56,6 +57,7 @@ export const save = mutation({
     includeTags: v.array(v.string()),
     excludeTags: v.array(v.string()),
   },
+  returns: preferenceResult,
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const website = clip(args.website, 200);

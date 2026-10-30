@@ -3,6 +3,7 @@ import { convex, crossDomain } from "@convex-dev/better-auth/plugins";
 import { betterAuth, type BetterAuthOptions } from "better-auth/minimal";
 import { components } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
+import { v } from "convex/values";
 import { query } from "./_generated/server";
 import authConfig from "./auth.config";
 
@@ -38,6 +39,14 @@ export const createAuth = (ctx: GenericCtx<DataModel>) => {
 
 export const getCurrentUser = query({
   args: {},
+  returns: v.union(
+    v.null(),
+    v.object({
+      id: v.string(),
+      name: v.union(v.string(), v.null()),
+      email: v.union(v.string(), v.null()),
+    }),
+  ),
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
