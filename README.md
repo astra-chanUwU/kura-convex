@@ -1,69 +1,88 @@
 # Kura Convex
 
-A local remake of [Kura](https://github.com/astra-chanUwU/kura-v4). The backend is [self-hosted Convex](https://docs.convex.dev/self-hosting), running on this machine with the official Docker Compose file. Nothing here talks to Convex Cloud.
+Image board on self-hosted Convex. Posts, tags, accounts, and preferences live in Convex. Picture files live in a local S3 bucket. Remake of [Kura v4](https://github.com/astra-chanUwU/kura-v4). The app uses port 5175 so it can run next to v4.
 
-| | |
+| Service | URL |
 | --- | --- |
 | App | http://127.0.0.1:5175 |
-| Backend | http://127.0.0.1:3210 |
-| HTTP actions | http://127.0.0.1:3211 |
+| Convex | http://127.0.0.1:3210 |
+| Convex HTTP | http://127.0.0.1:3211 |
 | Dashboard | http://127.0.0.1:6791 |
-
-The app is an image board. Posts and preferences live in Convex. The Convex backend keeps its database and files in the Docker `data` volume. Picture files live in a local S3 bucket, `kura-images`, served by s3rver. Accounts use Better Auth. `pnpm seed` fills the board from public boorus. The default is a broad general-rated Safebooru catalog. Other presets and flags pull Danbooru, Yande.re, Konachan, and Gelbooru, including questionable and explicit posts.
+| S3 | http://127.0.0.1:9000 |
+| Thumbnails | http://127.0.0.1:5006 |
 
 ## Setup
 
-Install Node 24 or newer, pnpm 12.15.0, and Docker.
+Node 24 or newer, pnpm 12, and Docker.
 
 ```sh
 pnpm install
-docker compose up -d
-docker compose exec backend ./generate_admin_key.sh
-```
-
-Put the printed admin key in `.env.local`, using `.env.example` as the template:
-
-```sh
-CONVEX_SELF_HOSTED_URL='http://127.0.0.1:3210'
-CONVEX_SELF_HOSTED_ADMIN_KEY='<your admin key>'
-VITE_CONVEX_URL='http://127.0.0.1:3210'
-```
-
-`node scripts/self-hosted-env.mjs` runs those same steps and writes `.env.local` for you. Do not commit that file.
-
-Paste the admin key into the dashboard at http://127.0.0.1:6791.
-
-## Develop
-
-`pnpm dev` runs `convex dev` against the URL in `.env.local` and starts Vite. Leave it running while you edit `convex/`. Picture bytes are served by s3rver, because the public MinIO images are no longer published. Start that before the board, then seed if the board is empty.
-
-```sh
+node scripts/self-hosted-env.mjs
 node scripts/ensure-env.mjs
+```
+
+`self-hosted-env` starts Docker and writes `.env.local`, including the admin key. `ensure-env` adds the auth and thumbnail secrets and pushes them into Convex. Do not commit `.env.local`.
+
+If the dashboard at http://127.0.0.1:6791 asks for a key, paste `CONVEX_SELF_HOSTED_ADMIN_KEY` from `.env.local`.
+
+## Run
+
+Start these in separate terminals, in this order:
+
+```sh
 pnpm s3
 pnpm thumbs
-pnpm seed
-```
-
-`pnpm s3` runs s3rver, stores files under `D:\kura-minio\data`, and listens on port 9000. `pnpm thumbs` builds the Go thumbnail service and listens on port 5006. Convex calls that service after an upload. The service reads the original from `kura-images` and writes a 480px WebP beside it. The board uses the thumbnail. The post page uses the original. Until the thumbnail exists, the board shows the original.
-
-`pnpm seed` pulls 1,200 general-rated Safebooru samples across portraits, scenery, fashion, fantasy, and the original yuri, cute, and cyberpunk tags. It asks the thumbnail service for the small copy and skips ids that are already stored. It calls the internal seed functions with the admin key. `pnpm seed -- --list` prints presets, tag sets, and boards. `--tags`, `--set`, `--board`, and `--rating` choose the search. `pnpm seed:nsfw` imports questionable and explicit posts from Danbooru, Yande.re, and Konachan. Gelbooru joins that preset when `GELBOORU_API_KEY` and `GELBOORU_USER_ID` are set in `.env.local`. Posts tagged as minors are skipped. Leave `pnpm dev` running so Convex has the seed functions before you import.
-
-`pnpm migrate` fills search text and tag order on pictures already in Convex, then asks the thumbnail service for any picture that still has no thumbnail.
-
-```sh
 pnpm dev
-pnpm exec convex deploy   # push once, without Vite
-docker compose stop       # stop the backend and dashboard, keep the volume
 ```
 
-When this moves to a server, run the same Compose file there and point `CONVEX_SELF_HOSTED_URL` at that host.
+`pnpm dev` runs `convex dev` and Vite. Leave it running while you edit `convex/`. The app is http://127.0.0.1:5175.
 
-## Check
+With `pnpm dev` still running, fill the board:
 
 ```sh
-pnpm check
+pnpm seed
+pnpm accounts
 ```
 
-That runs oxlint, TypeScript, and the Vite build. It does not need the backend running.
+`pnpm accounts` creates the local users. The password is `KURA_SEED_PASSWORD` in `.env.local`. The first run sets it to `kura-local-board`. `hana@kura.test` is the owner. The other accounts are `ren`, `sable`, `mio`, `yuna`, `akira`, `noel`, `camille`, `jules`, `priya`, `leo`, and `eden`, all `@kura.test`.
 
-The app port sits next to Kura V4 (`5174`) without taking it.
+## Commands
+
+| Command | What it does |
+| --- | --- |
+| `pnpm dev` | `convex dev` and Vite on port 5175 |
+| `pnpm s3` | S3 on port 9000. Files go in `D:\kura-minio\data` |
+| `pnpm thumbs` | Build and start the thumbnail service on port 5006 |
+| `pnpm seed` | Import 1,200 general Safebooru posts. See below |
+| `pnpm seed:nsfw` | Import questionable and explicit posts |
+| `pnpm accounts` | Create the local accounts and their saved posts |
+| `pnpm migrate` | Fill search text on old posts and request missing thumbnails |
+| `pnpm deploy` | Push Convex functions once, without Vite |
+| `pnpm check` | Lint, typecheck, and production build. Backend can be stopped |
+| `pnpm lint` | oxlint |
+| `pnpm typecheck` | TypeScript |
+| `pnpm build` | Production build |
+| `pnpm preview` | Serve the production build on port 5175 |
+| `docker compose stop` | Stop Convex and the dashboard. The database volume stays |
+| `docker compose up -d` | Start Convex and the dashboard again |
+
+`node scripts/self-hosted-env.mjs` and `node scripts/ensure-env.mjs` are the first-time setup commands above. Run `self-hosted-env` again with `--force` to rewrite the admin key.
+
+## Seed
+
+`pnpm dev`, `pnpm s3`, and `pnpm thumbs` need to be running first. Ids already stored are skipped. Posts tagged as minors are skipped.
+
+```sh
+pnpm seed -- --list
+pnpm seed -- --preset scenery --limit 400
+pnpm seed -- --set yuri,fashion --board safebooru,danbooru
+pnpm seed -- --tags "yuri 1girl,witch,mecha" --limit 300
+pnpm seed -- --board danbooru --rating explicit --tags nude,lingerie --dry-run
+pnpm seed:nsfw
+```
+
+`--list` prints presets, tag sets, and boards. A comma is a separate search. A space inside one search means both tags. `--dry-run` only prints what it would import.
+
+`--rating` is `safe`, `questionable`, `explicit`, or `nsfw`. The default preset is `wide` (general Safebooru). `pnpm seed:nsfw` uses Danbooru and Yande.re. Konachan is included and skipped if its API refuses the request. Gelbooru runs when `.env.local` has `GELBOORU_API_KEY` and `GELBOORU_USER_ID`. Optional Danbooru login: `DANBOORU_LOGIN` and `DANBOORU_API_KEY`.
+
+Turn on "show sensitive" in preferences to see questionable and explicit posts.
