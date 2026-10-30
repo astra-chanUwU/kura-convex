@@ -15,13 +15,19 @@ import "@fontsource/jetbrains-mono/700.css";
 import "hack-font/build/web/hack.css";
 import "./index.css";
 
-const root = document.getElementById("root");
-if (!root) throw new Error("Root element #root is missing.");
+if (window.location.hostname === "127.0.0.1") {
+  const next = new URL(window.location.href);
+  next.hostname = "localhost";
+  window.location.replace(next.href);
+}
+
+const root = window.location.hostname === "127.0.0.1" ? null : document.getElementById("root");
+if (window.location.hostname !== "127.0.0.1" && !root) throw new Error("Root element #root is missing.");
 
 const url = import.meta.env.VITE_CONVEX_URL ?? "";
 const convex = url ? new ConvexReactClient(url) : null;
 
-createRoot(root).render(
+if (root) createRoot(root).render(
   <StrictMode>
     {convex ? (
       <ConvexBetterAuthProvider client={convex} authClient={authClient as unknown as AuthClient}>

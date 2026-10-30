@@ -1,6 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { font, rating, storedTheme } from "./validators";
+import { accountRole, font, rating, storedTheme } from "./validators";
 
 // Image bytes live in object storage. These tables store keys and metadata only.
 // thumbKey is a WebP used by the board. storageKey is the original, used on the post page.
@@ -68,5 +68,6 @@ export default defineSchema({
     showSensitive: v.boolean(),
     includeTags: v.array(v.string()),
     excludeTags: v.array(v.string()),
+    role: v.optional(accountRole),
   }).index("by_user", ["userId"]),
 });

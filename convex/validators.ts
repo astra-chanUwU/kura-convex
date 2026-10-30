@@ -18,6 +18,13 @@ function unionOf<const T extends readonly [string, string, ...string[]]>(ids: T)
 export const theme = unionOf(themeIds);
 export const font = unionOf(fontIds);
 export const storedTheme = unionOf(storedThemeIds);
+export const accountRole = v.union(
+  v.literal("owner"),
+  v.literal("moderator"),
+  v.literal("curator"),
+  v.literal("contributor"),
+  v.literal("member"),
+);
 
 export const postCard = v.object({
   _id: v.id("posts"),
@@ -72,6 +79,7 @@ export const preferenceResult = v.object({
   showSensitive: v.boolean(),
   includeTags: v.array(v.string()),
   excludeTags: v.array(v.string()),
+  role: v.union(accountRole, v.null()),
   signedIn: v.boolean(),
 });
 

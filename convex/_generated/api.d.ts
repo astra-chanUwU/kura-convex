@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as account from "../account.js";
 import type * as auth from "../auth.js";
 import type * as authz from "../authz.js";
 import type * as http from "../http.js";
@@ -15,6 +16,7 @@ import type * as maintenance from "../maintenance.js";
 import type * as posts from "../posts.js";
 import type * as preferences from "../preferences.js";
 import type * as records from "../records.js";
+import type * as roles from "../roles.js";
 import type * as seed from "../seed.js";
 import type * as site from "../site.js";
 import type * as storage from "../storage.js";
@@ -27,6 +29,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  account: typeof account;
   auth: typeof auth;
   authz: typeof authz;
   http: typeof http;
@@ -34,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   posts: typeof posts;
   preferences: typeof preferences;
   records: typeof records;
+  roles: typeof roles;
   seed: typeof seed;
   site: typeof site;
   storage: typeof storage;
@@ -67,5 +71,5 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  betterAuth: import("@convex-dev/better-auth/_generated/component.js").ComponentApi<"betterAuth">;
+  betterAuth: import("../betterAuth/_generated/component.js").ComponentApi<"betterAuth">;
 };

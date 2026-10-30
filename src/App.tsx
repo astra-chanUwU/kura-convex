@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../convex/_generated/api";
 import { AppearanceControls } from "@/components/AppearanceControls";
 import { AuthCard } from "@/components/AuthCard";
+import { RecoverAccount } from "@/components/RecoverAccount";
 import { Board } from "@/components/Board";
 import { PostView } from "@/components/PostView";
 import { Preferences } from "@/components/Preferences";
@@ -28,7 +29,8 @@ type Route =
   | { name: "board"; saved: boolean; filter: BoardFilter }
   | { name: "post"; id: string; saved: boolean; filter: BoardFilter }
   | { name: "preferences" }
-  | { name: "auth"; mode: "sign-in" | "sign-up" };
+  | { name: "auth"; mode: "sign-in" | "sign-up" }
+  | { name: "recover" };
 
 function parseHash(hash: string): Route {
   const raw = hash.replace(/^#/, "") || "/";
@@ -40,6 +42,7 @@ function parseHash(hash: string): Route {
     return { name: "post", id: decodeURIComponent(path.slice("/posts/".length)), saved, filter };
   }
   if (path.startsWith("/preferences")) return { name: "preferences" };
+  if (path.startsWith("/recover")) return { name: "recover" };
   if (path.startsWith("/auth")) {
     return { name: "auth", mode: params.get("mode") === "sign-up" ? "sign-up" : "sign-in" };
   }
@@ -195,6 +198,7 @@ function Kura() {
           <Preferences theme={theme} font={font} onAppearance={change} />
         )}
         {route.name === "auth" && <AuthCard mode={route.mode} />}
+        {route.name === "recover" && <RecoverAccount />}
       </main>
       {upload && <UploadDialog onClose={() => setUpload(false)} />}
     </div>

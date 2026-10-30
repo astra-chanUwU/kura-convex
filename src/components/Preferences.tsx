@@ -4,9 +4,10 @@ import { api } from "../../convex/_generated/api";
 import { AppearanceControls } from "@/components/AppearanceControls";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
-import { authClient } from "@/lib/auth-client";
+import { AccountSecurity } from "@/components/AccountSecurity";
 import { errorText } from "@/lib/errors";
 import type { FontId, ThemeId } from "@/lib/appearance";
+import { roleLabel } from "../../shared/roles";
 
 export function Preferences({
   theme,
@@ -39,20 +40,13 @@ export function Preferences({
     <section className="grid max-w-[44rem] gap-4">
       <h1 className="m-0 text-2xl font-semibold">Preferences</h1>
       <p className="m-0 text-sm text-muted-foreground">
+        {`${prefs.displayName.trim()}, ${roleLabel(prefs.role).toLowerCase()}`}
+      </p>
+      <p className="m-0 text-sm text-muted-foreground">
         Saved on your account. Default tags fill an empty board, and My defaults on the board jumps back to them.
       </p>
       <PreferencesForm prefs={prefs} theme={theme} font={font} onAppearance={onAppearance} />
-      <button
-        type="button"
-        className="w-fit cursor-pointer border-0 bg-transparent p-0 text-sm text-danger"
-        onClick={() => {
-          void authClient.signOut().then(() => {
-            window.location.hash = "#/";
-          });
-        }}
-      >
-        Sign out
-      </button>
+      <AccountSecurity />
     </section>
   );
 }
