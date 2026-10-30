@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi } from "convex/server";
+import { assertLocalBackend } from "./target.mjs";
 
 // Local board members. Roles are the contract for account permissions.
 // The password lives in .env.local as KURA_SEED_PASSWORD and is not printed.
@@ -20,6 +21,7 @@ const members = [
 ];
 
 const env = readEnv(".env.local");
+assertLocalBackend(env, "pnpm accounts");
 const adminKey = env.CONVEX_SELF_HOSTED_ADMIN_KEY;
 if (!adminKey) {
   console.error("CONVEX_SELF_HOSTED_ADMIN_KEY is missing from .env.local.");

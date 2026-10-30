@@ -1,7 +1,15 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { isLoopback, readEnv } from "./target.mjs";
 
 const envPath = ".env.local";
+const existing = readEnv(envPath);
+if (existing.CONVEX_SELF_HOSTED_URL && !isLoopback(existing.CONVEX_SELF_HOSTED_URL)) {
+  console.error(`${envPath} points at ${existing.CONVEX_SELF_HOSTED_URL}.`);
+  console.error("self-hosted-env only writes the local backend.");
+  process.exit(1);
+}
+
 const backendUrl = `http://127.0.0.1:${composePort("PORT", "3210")}`;
 const siteUrl = `http://127.0.0.1:${composePort("SITE_PROXY_PORT", "3211")}`;
 const force = process.argv.includes("--force");

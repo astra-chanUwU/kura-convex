@@ -13,6 +13,7 @@ import { ConvexHttpClient } from "convex/browser";
 import { anyApi } from "convex/server";
 import { requestThumbnail } from "./thumb-client.mjs";
 import { BOARD_ORDER, boardFor, collect, helpText, resolvePlan, skipReason } from "./seed-lib.mjs";
+import { assertLocalBackend } from "./target.mjs";
 
 const BUCKET = "kura-images";
 const ENDPOINT = "http://127.0.0.1:9000";
@@ -34,6 +35,7 @@ export async function main(args) {
     console.error("CONVEX_SELF_HOSTED_ADMIN_KEY is missing from .env.local.");
     process.exit(1);
   }
+  if (!plan.dryRun) assertLocalBackend(env, "pnpm seed");
 
   let convex = null;
   if (!plan.dryRun) {

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { assertLocalBackend, readEnv } from "./target.mjs";
 
 const path = ".env.local";
 if (!existsSync(path)) {
@@ -8,9 +9,8 @@ if (!existsSync(path)) {
   process.exit(1);
 }
 const text = readFileSync(path, "utf8");
-const values = Object.fromEntries(
-  [...text.matchAll(/^([A-Z0-9_]+)='([^']*)'/gm)].map((match) => [match[1], match[2]]),
-);
+const values = readEnv(path);
+assertLocalBackend(values, "node scripts/ensure-env.mjs");
 
 const thumbSecret = values.KURA_THUMB_SECRET || randomBytes(32).toString("hex");
 const sitePort = composePort("SITE_PROXY_PORT", "3211");

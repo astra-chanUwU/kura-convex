@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { assertLocalBackend, localBackendEnv, localProcessEnv } from "./target.mjs";
 
 const envPath = ".env.local";
 const envText = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
@@ -13,6 +14,8 @@ if (!envText.includes("CONVEX_SELF_HOSTED_URL=")) {
   console.error("Or run: node scripts/self-hosted-env.mjs");
   process.exit(1);
 }
+
+assertLocalBackend(localBackendEnv(), "pnpm dev");
 
 const cli = fileURLToPath(
   new URL("../node_modules/convex/bin/main.js", import.meta.url),
@@ -43,6 +46,7 @@ function run(command, args) {
   const child = spawn(command, args, {
     stdio: "inherit",
     windowsHide: true,
+    env: localProcessEnv(),
   });
   children.push(child);
   return child;

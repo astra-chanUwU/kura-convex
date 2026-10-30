@@ -2,8 +2,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { ConvexHttpClient } from "convex/browser";
 import { anyApi } from "convex/server";
 import { requestThumbnails } from "./thumb-client.mjs";
+import { assertLocalBackend } from "./target.mjs";
 
 const env = readEnv(".env.local");
+assertLocalBackend(env, "pnpm migrate");
 const adminKey = env.CONVEX_SELF_HOSTED_ADMIN_KEY;
 if (!adminKey) {
   console.error("CONVEX_SELF_HOSTED_ADMIN_KEY is missing from .env.local.");
