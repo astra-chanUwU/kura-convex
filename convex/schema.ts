@@ -1,6 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import { accountRole, font, rating, storedTheme } from "./validators";
+import { accountRole, changeAction, font, postSnapshot, rating, storedTheme } from "./validators";
 
 // Image bytes live in object storage. These tables store keys and metadata only.
 // thumbKey is a WebP used by the board. storageKey is the original, used on the post page.
@@ -22,6 +22,7 @@ export default defineSchema({
     authorId: v.string(),
     safebooruId: v.optional(v.number()),
     tags: v.array(v.string()),
+    removedAt: v.optional(v.number()),
   })
     .index("by_createdAt", ["createdAt"])
     .index("by_rating_createdAt", ["rating", "createdAt"])
@@ -70,4 +71,20 @@ export default defineSchema({
     excludeTags: v.array(v.string()),
     role: v.optional(accountRole),
   }).index("by_user", ["userId"]),
+
+  // Append-only. A rollback is a new row that points at the change it undoes.
+  changes: defineTable({
+    entityType: v.literal("post"),
+    entityId: v.string(),
+    actorId: v.string(),
+    actorName: v.string(),
+    action: changeAction,
+    before: postSnapshot,
+    after: postSnapshot,
+    rollbackOf: v.optional(v.id("changes")),
+    createdAt: v.number(),
+  })
+    .index("by_createdAt", ["createdAt"])
+    .index("by_entity_createdAt", ["entityType", "entityId", "createdAt"])
+    .index("by_actor_createdAt", ["actorId", "createdAt"]),
 });

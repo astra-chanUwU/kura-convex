@@ -7,7 +7,7 @@ import { thumbKeyFor } from "../shared/storage";
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { action, internalAction } from "./_generated/server";
-import { requireUserId } from "./authz";
+import { requirePoster } from "./authz";
 import { rating } from "./validators";
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -51,7 +51,7 @@ export const prepareUpload = action({
     uploadUrl: v.string(),
   }),
   handler: async (ctx, args) => {
-    await requireUserId(ctx);
+    await requirePoster(ctx);
     const ext = TYPES[args.contentType];
     if (!ext) throw new ConvexError("Use a JPEG, PNG, WebP, or GIF.");
     if (args.byteSize <= 0 || args.byteSize > MAX_BYTES) {
@@ -89,7 +89,7 @@ export const publish = action({
   },
   returns: v.id("posts"),
   handler: async (ctx, args): Promise<Id<"posts">> => {
-    const userId = await requireUserId(ctx);
+    const userId = await requirePoster(ctx);
     if (!TYPES[args.contentType] || !uploadKey.test(args.storageKey)) {
       throw new ConvexError("That upload is not a picture we signed.");
     }

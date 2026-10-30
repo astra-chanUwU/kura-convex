@@ -13,8 +13,9 @@ const values = Object.fromEntries(
 );
 
 const thumbSecret = values.KURA_THUMB_SECRET || randomBytes(32).toString("hex");
+const sitePort = composePort("SITE_PROXY_PORT", "3211");
 const additions = {
-  VITE_CONVEX_SITE_URL: "http://127.0.0.1:3211",
+  VITE_CONVEX_SITE_URL: `http://127.0.0.1:${sitePort}`,
   VITE_SITE_URL: "http://127.0.0.1:5175",
   VITE_S3_PUBLIC_URL: "http://127.0.0.1:9000/kura-images",
   BETTER_AUTH_SECRET: values.BETTER_AUTH_SECRET || randomBytes(32).toString("base64"),
@@ -45,4 +46,10 @@ for (const [key, value] of Object.entries(convexEnv)) {
     shell: true,
   });
   console.log(`Set Convex env ${key}`);
+}
+
+function composePort(name, fallback) {
+  if (!existsSync(".env")) return fallback;
+  const match = readFileSync(".env", "utf8").match(new RegExp(`^${name}=(\\d+)`, "m"));
+  return match?.[1] ?? fallback;
 }

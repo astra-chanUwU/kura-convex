@@ -22,13 +22,18 @@ import {
   type BoardFilter,
   type BoardView,
 } from "@/lib/board";
+import { HistoryPage } from "@/components/HistoryPage";
+import { PostHistory } from "@/components/PostHistory";
+import { PostModeration } from "@/components/PostModeration";
 import { errorText } from "@/lib/errors";
+import { canModerate, canUpload } from "../shared/roles";
 import { cn } from "@/lib/utils";
 
 type Route =
   | { name: "board"; saved: boolean; filter: BoardFilter }
   | { name: "post"; id: string; saved: boolean; filter: BoardFilter }
   | { name: "preferences" }
+  | { name: "history" }
   | { name: "auth"; mode: "sign-in" | "sign-up" }
   | { name: "recover" };
 
@@ -42,6 +47,7 @@ function parseHash(hash: string): Route {
     return { name: "post", id: decodeURIComponent(path.slice("/posts/".length)), saved, filter };
   }
   if (path.startsWith("/preferences")) return { name: "preferences" };
+  if (path.startsWith("/history")) return { name: "history" };
   if (path.startsWith("/recover")) return { name: "recover" };
   if (path.startsWith("/auth")) {
     return { name: "auth", mode: params.get("mode") === "sign-up" ? "sign-up" : "sign-in" };
@@ -64,6 +70,7 @@ export default function App({ url }: { url: string }) {
 function Kura() {
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   const [upload, setUpload] = useState(false);
+  const [uploadNote, setUploadNote] = useState("");
   const [appearanceError, setAppearanceError] = useState("");
   const [view, setView] = useState<BoardView>(() => readBoardView());
   const prefs = useQuery(api.preferences.get);
@@ -99,6 +106,10 @@ function Kura() {
   }, []);
 
   useEffect(() => {
+    if (route.name !== "board") setUploadNote("");
+  }, [route]);
+
+  useEffect(() => {
     if (route.name !== "board" || route.saved || route.filter.cleared || filterActive(route.filter)) return;
     if (!prefs?.signedIn) return;
     if (prefs.includeTags.length === 0 && prefs.excludeTags.length === 0) return;
@@ -118,7 +129,7 @@ function Kura() {
       >
         Skip to content
       </a>
-      <header className="sticky top-0 z-40 flex min-h-[var(--header-h)] items-stretch gap-8 border-b border-border bg-surface px-[var(--page-x)] max-[900px]:gap-4 max-[640px]:gap-3">
+      <header className="sticky top-0 z-40 flex min-h-[var(--header-h)] items-stretch gap-8 border-b border-border bg-surface px-[var(--page-x)] max-[900px]:gap-4 max-[640px]:gap-2">
         <a
           href="#/"
           aria-label="Kura home"
@@ -126,19 +137,24 @@ function Kura() {
         >
           Kura
         </a>
-        <nav aria-label="Main navigation" className="flex min-w-0 items-stretch gap-5 max-[900px]:gap-3.5 max-[640px]:gap-3">
+        <nav aria-label="Main navigation" className="flex shrink-0 items-stretch gap-5 max-[900px]:gap-3.5 max-[640px]:gap-2.5">
           <a href="#/" className={navClass((route.name === "board" || route.name === "post") && !boardSaved)}>
             Board
           </a>
           <a href="#/saved" className={navClass(boardSaved && (route.name === "board" || route.name === "post"))}>
             Saved
           </a>
+          {canModerate(prefs?.role) && (
+            <a href="#/history" className={navClass(route.name === "history")}>
+              History
+            </a>
+          )}
           {signedIn ? (
             <a href="#/preferences" className={cn(navClass(route.name === "preferences"), "min-w-0 gap-2")}>
               <span className="grid size-6 shrink-0 place-items-center rounded-full border border-border bg-surface-soft text-xs font-bold text-accent">
                 {name.slice(0, 1).toUpperCase()}
               </span>
-              <span className="max-w-48 truncate max-[900px]:max-w-32 max-[640px]:max-w-[4.5rem]">{name}</span>
+              <span className="max-w-48 truncate max-[900px]:max-w-32 max-[640px]:sr-only">{name}</span>
             </a>
           ) : (
             <>
@@ -154,14 +170,14 @@ function Kura() {
             </>
           )}
         </nav>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex min-w-0 items-center gap-2">
           <AppearanceControls theme={theme} font={font} onChange={change} />
           <SettingsMenu onPreferences={() => (window.location.hash = "#/preferences")} />
         </div>
       </header>
-      {appearanceError && (
+      {(appearanceError || uploadNote) && (
         <p className="m-0 border-b border-border bg-surface px-[var(--page-x)] py-2 text-sm text-danger" role="alert">
-          {appearanceError}
+          {appearanceError || uploadNote}
         </p>
       )}
       <main
@@ -186,17 +202,30 @@ function Kura() {
               writeBoardView(next);
             }}
             onUpload={() => {
-              if (signedIn) setUpload(true);
-              else window.location.hash = "#/auth";
+              if (!signedIn) {
+                window.location.hash = "#/auth";
+                return;
+              }
+              if (!canUpload(prefs?.role)) {
+                setUploadNote("Adding a picture needs a contributor account.");
+                return;
+              }
+              setUploadNote("");
+              setUpload(true);
             }}
           />
         )}
         {route.name === "post" && (
-          <PostView id={route.id} back={boardHash(route.saved, route.filter)} />
+          <>
+            <PostView id={route.id} back={boardHash(route.saved, route.filter)} />
+            <PostModeration id={route.id} back={boardHash(route.saved, route.filter)} />
+            <PostHistory postId={route.id} />
+          </>
         )}
         {route.name === "preferences" && (
           <Preferences theme={theme} font={font} onAppearance={change} />
         )}
+        {route.name === "history" && <HistoryPage />}
         {route.name === "auth" && <AuthCard mode={route.mode} />}
         {route.name === "recover" && <RecoverAccount />}
       </main>

@@ -66,7 +66,7 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
           <Settings />
         </Button>
         {open && (
-          <div className="absolute right-0 z-50 mt-2 w-56 rounded-lg border border-border bg-surface p-3 text-foreground">
+          <div className="absolute right-0 z-50 mt-2 w-56 rounded-[0.5rem] border border-border-strong bg-surface p-3 text-foreground">
             <label className="flex items-center justify-between gap-3 text-sm">
               Sensitive
               <Switch
@@ -97,7 +97,7 @@ export function SettingsMenu({ onPreferences }: { onPreferences: () => void }) {
         open={askAge}
         onClose={() => setAskAge(false)}
         title="Are you over 18?"
-        description="Sensitive pictures stay hidden until you confirm. Safebooru seeds are rated general."
+        description="Sensitive pictures stay hidden until you confirm you are over 18."
         className="max-w-sm"
       >
         <div className="mt-4 flex justify-end gap-2">

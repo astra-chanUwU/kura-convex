@@ -69,7 +69,7 @@ export function UploadDialog({ onClose }: { onClose: () => void }) {
       className="max-w-lg"
     >
       <form onSubmit={(event) => void submit(event)}>
-        <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-border-strong bg-surface-soft px-4 py-8 text-center text-sm text-muted-foreground hover:border-accent">
+        <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-xl border-[1.5px] border-dashed border-border-strong bg-surface-soft px-4 py-8 text-center text-sm text-foreground hover:border-accent">
           <ImagePlus className="mb-2 size-5" />
           {file ? file.name : "Drop a picture here, or browse"}
           <input

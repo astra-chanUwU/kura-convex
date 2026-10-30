@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/davidbyttow/govips/v2/vips"
 )
@@ -25,9 +27,12 @@ func Thumbnail(ctx context.Context, file, ext string, animate bool) ([]byte, err
 
 func still(file string) ([]byte, error) {
 	params := vips.NewImportParams()
-	pages := vips.IntParameter{}
-	pages.Set(1)
-	params.NumPages = pages
+	switch strings.ToLower(filepath.Ext(file)) {
+	case ".gif", ".webp":
+		pages := vips.IntParameter{}
+		pages.Set(1)
+		params.NumPages = pages
+	}
 	image, err := vips.LoadThumbnailFromFile(file, maxEdge, maxEdge, vips.InterestingNone, vips.SizeDown, params)
 	if err != nil {
 		return nil, err

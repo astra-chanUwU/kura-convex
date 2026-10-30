@@ -11,6 +11,7 @@
 import type * as account from "../account.js";
 import type * as auth from "../auth.js";
 import type * as authz from "../authz.js";
+import type * as history from "../history.js";
 import type * as http from "../http.js";
 import type * as maintenance from "../maintenance.js";
 import type * as posts from "../posts.js";
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   account: typeof account;
   auth: typeof auth;
   authz: typeof authz;
+  history: typeof history;
   http: typeof http;
   maintenance: typeof maintenance;
   posts: typeof posts;

@@ -1,8 +1,9 @@
 import { useMutation, useQuery } from "convex/react";
-import { ArrowLeft, Heart, Trash2 } from "lucide-react";
+import { ArrowLeft, Heart, Pencil, Trash2 } from "lucide-react";
 import { Component, type ReactNode, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { PostEditor } from "@/components/PostHistory";
 import { Button } from "@/components/ui/button";
 import { errorText } from "@/lib/errors";
 import { formatBytes, imageUrl, tagLabel } from "@/lib/images";
@@ -21,17 +22,25 @@ function PostBody({ id, back }: { id: Id<"posts">; back: string }) {
   const toggle = useMutation(api.posts.toggleFavorite);
   const remove = useMutation(api.posts.remove);
   const [error, setError] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [savedNote, setSavedNote] = useState("");
 
   if (post === undefined) return <p className="p-8 text-sm text-muted-foreground">Loading…</p>;
   if (!post) return <p className="p-8">That picture is not on the board.</p>;
 
   return (
+    <>
     <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,25rem)]">
       <div className="grid min-w-0 gap-4">
         <a href={back} className="inline-flex w-fit items-center gap-2 text-[0.9rem] no-underline hover:text-accent">
           <ArrowLeft className="size-4" />
           Board
         </a>
+        {post.removed && (
+          <p className="m-0 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
+            This picture is off the board. Roll back the removal in the history below to bring it back.
+          </p>
+        )}
         <div className="relative">
           <img
             src={imageUrl(post.storageKey)}
@@ -47,12 +56,12 @@ function PostBody({ id, back }: { id: Id<"posts">; back: string }) {
       </div>
       <aside className="grid content-start gap-3 rounded-xl border border-border bg-surface p-4 lg:sticky lg:top-[calc(var(--header-h)+1rem)]">
         <h1 className="m-0 text-[1.35rem] font-semibold break-words">{post.caption || "Untitled"}</h1>
+        {post.authorName && <p className="m-0 text-sm text-muted-foreground">Posted by {post.authorName}</p>}
         <p className="m-0 text-sm text-muted-foreground">
           {post.width}×{post.height} · {formatBytes(post.byteSize)}
-          {post.safebooruId ? " · Safebooru" : ""}
         </p>
-        {post.artist && <Detail label="Artist">{post.artist}</Detail>}
-        {post.source && (
+        {!editing && post.artist && <Detail label="Artist">{post.artist}</Detail>}
+        {!editing && post.source && (
           <Detail label="Source">
             <a href={post.source} className="text-accent break-all" target="_blank" rel="noreferrer">
               {post.source}
@@ -77,11 +86,17 @@ function PostBody({ id, back }: { id: Id<"posts">; back: string }) {
             <Heart className={cn("size-4", post.favorite && "fill-current")} />
             {post.favorite ? "Saved" : "Save"}
           </Button>
-          {post.mine && (
+          {post.canEdit && !editing && (
+            <Button variant="outline" onClick={() => setEditing(true)}>
+              <Pencil className="size-4" />
+              Edit
+            </Button>
+          )}
+          {post.mine && post.canRemove && (
             <Button
               variant="outline"
               onClick={() => {
-                if (!window.confirm("Remove this picture from the board?")) return;
+                if (!window.confirm("Remove this picture from the board? A moderator can roll it back from history.")) return;
                 setError("");
                 void remove({ postId: post._id })
                   .then(() => {
@@ -95,24 +110,34 @@ function PostBody({ id, back }: { id: Id<"posts">; back: string }) {
             </Button>
           )}
         </div>
+        {savedNote && !editing && <p className="m-0 text-sm text-success">{savedNote}</p>}
         {error && <p className="m-0 text-sm text-danger">{error}</p>}
-        {post.tags.length > 0 && (
-          <Detail label="Tags">
-            <div className="flex flex-wrap gap-1.5">
-              {post.tags.map((tag) => (
-                <a
-                  key={tag}
-                  href={`#/?tags=${encodeURIComponent(tag)}`}
-                  className="inline-flex rounded-full border border-border-strong bg-surface-soft px-2 py-0.5 text-[0.8rem] text-foreground no-underline hover:border-accent"
-                >
-                  {tagLabel(tag)}
-                </a>
-              ))}
-            </div>
-          </Detail>
+        {editing ? (
+          <PostEditor
+            post={post}
+            onClose={() => setEditing(false)}
+            onSaved={() => setSavedNote("Saved to the history below.")}
+          />
+        ) : (
+          post.tags.length > 0 && (
+            <Detail label="Tags">
+              <div className="flex flex-wrap gap-1.5">
+                {post.tags.map((tag) => (
+                  <a
+                    key={tag}
+                    href={`#/?tags=${encodeURIComponent(tag)}`}
+                    className="inline-flex rounded-full border border-border-strong bg-surface-soft px-2 py-0.5 text-[0.8rem] text-foreground no-underline hover:border-accent"
+                  >
+                    {tagLabel(tag)}
+                  </a>
+                ))}
+              </div>
+            </Detail>
+          )
         )}
       </aside>
     </div>
+    </>
   );
 }
 

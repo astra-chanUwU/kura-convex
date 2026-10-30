@@ -4,9 +4,17 @@ import { thumbKeyFor } from "../shared/storage";
 import type { Doc, Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { internalMutation, mutation, query } from "./_generated/server";
-import { internal } from "./_generated/api";
-import { optionalUserId, requireUserId } from "./authz";
-import { deletePostGraph, searchTextFor, writeTags } from "./records";
+import { canModerate } from "../shared/roles";
+import { optionalUserId, requireModerator, requireUserId, roleFor } from "./authz";
+import {
+  applyPostSnapshot,
+  emptySnapshot,
+  recordPostChange,
+  sameSnapshot,
+  snapshotOf,
+  type PostSnapshot,
+} from "./history";
+import { clipSource, clipText, searchTextFor, writeTags } from "./records";
 import { normalizeTag, normalizeTags, postCard, postDetail, rating, tagCount } from "./validators";
 
 async function viewerFilter(ctx: QueryCtx) {
@@ -20,6 +28,7 @@ async function viewerFilter(ctx: QueryCtx) {
   return {
     userId,
     showSensitive: prefs?.showSensitive ?? false,
+    canModerate: userId ? canModerate(prefs?.role) : false,
   };
 }
 
@@ -30,6 +39,7 @@ function matches(
   exclude: string[],
   needle: string,
 ) {
+  if (post.removedAt) return false;
   if (!showSensitive && post.rating !== "safe") return false;
   if (include.some((tag) => !post.tags.includes(tag))) return false;
   if (exclude.some((tag) => post.tags.includes(tag))) return false;
@@ -151,11 +161,23 @@ export const get = query({
     const post = await ctx.db.get(args.id);
     if (!post) return null;
     const filter = await viewerFilter(ctx);
-    if (!matches(post, filter.showSensitive, [], [], "")) return null;
+    const removed = post.removedAt !== undefined;
+    if (removed && !filter.canModerate) return null;
+    if (!removed && !matches(post, filter.showSensitive, [], [], "")) return null;
+    if (removed && !filter.showSensitive && post.rating !== "safe") return null;
+    const author = await ctx.db
+      .query("preferences")
+      .withIndex("by_user", (q) => q.eq("userId", post.authorId))
+      .unique();
+    const mine = filter.userId !== null && filter.userId === post.authorId;
     return {
       ...toCard(post, await favoriteFlag(ctx, filter.userId, post._id)),
       originalName: post.originalName,
-      mine: filter.userId !== null && filter.userId === post.authorId,
+      mine,
+      canRemove: (mine || filter.canModerate) && !removed,
+      canEdit: mine || filter.canModerate,
+      removed,
+      authorName: author?.displayName ?? null,
     };
   },
 });
@@ -211,17 +233,63 @@ export const toggleFavorite = mutation({
   },
 });
 
+export const update = mutation({
+  args: {
+    postId: v.id("posts"),
+    artist: v.string(),
+    caption: v.string(),
+    source: v.string(),
+    rating,
+    tags: v.array(v.string()),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new ConvexError("That picture is gone.");
+    if (post.authorId !== userId && !canModerate(await roleFor(ctx, userId))) {
+      throw new ConvexError("You can only edit your own pictures.");
+    }
+    const before = snapshotOf(post);
+    const draft: PostSnapshot = {
+      artist: clipText(args.artist, 80),
+      caption: clipText(args.caption, 500),
+      source: clipSource(args.source),
+      tags: normalizeTags(args.tags, 40),
+      rating: args.rating,
+      removed: before.removed,
+    };
+    if (sameSnapshot(before, draft)) return false;
+    const after = await applyPostSnapshot(ctx, post, draft);
+    if (sameSnapshot(before, after)) return false;
+    await recordPostChange(ctx, {
+      postId: post._id,
+      actorId: userId,
+      action: "post.updated",
+      before,
+      after,
+    });
+    return true;
+  },
+});
+
 export const remove = mutation({
   args: { postId: v.id("posts") },
   returns: v.null(),
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const post = await ctx.db.get(args.postId);
-    if (!post) return null;
-    if (post.authorId !== userId) throw new ConvexError("You can only remove your own pictures.");
-    const keys = [post.storageKey, post.thumbKey].filter((key): key is string => Boolean(key));
-    await deletePostGraph(ctx, args.postId);
-    await ctx.scheduler.runAfter(0, internal.storage.deleteStored, { keys });
+    if (!post || post.removedAt) return null;
+    if (post.authorId !== userId) await requireModerator(ctx, userId);
+    const before = snapshotOf(post);
+    await ctx.db.patch(args.postId, { removedAt: Date.now() });
+    await recordPostChange(ctx, {
+      postId: post._id,
+      actorId: userId,
+      action: "post.removed",
+      before,
+      after: { ...before, removed: true },
+    });
     return null;
   },
 });
@@ -273,18 +341,13 @@ export const insertUploaded = internalMutation({
     };
     const id = await ctx.db.insert("posts", { ...fields, searchText: searchTextFor(fields) });
     await writeTags(ctx, id, tags, createdAt);
+    await recordPostChange(ctx, {
+      postId: id,
+      actorId: args.authorId,
+      action: "post.created",
+      before: emptySnapshot(),
+      after: snapshotOf({ ...fields, tags }),
+    });
     return id;
   },
 });
-
-function clipText(value: string, max: number) {
-  return value.trim().slice(0, max);
-}
-
-function clipSource(value: string) {
-  const source = clipText(value, 300);
-  if (source && !/^https?:\/\//i.test(source)) {
-    throw new ConvexError("Source needs to start with http:// or https://.");
-  }
-  return source;
-}

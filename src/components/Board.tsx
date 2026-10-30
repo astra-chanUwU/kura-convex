@@ -1,5 +1,5 @@
 import { usePaginatedQuery, useQuery } from "convex/react";
-import { ArrowUp, Search, Sparkles, Upload } from "lucide-react";
+import { ArrowUp, Sparkles, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
 import { Picture, PictureRow } from "@/components/BoardPictures";
@@ -150,7 +150,6 @@ export function Board({
       <div className="sticky top-[var(--header-h)] z-30 -mx-[var(--page-x)] bg-background px-[var(--page-x)]">
         <div className="flex flex-wrap items-center gap-2 py-3.5">
           <div className="relative w-full max-w-md max-[900px]:max-w-none max-[900px]:basis-full">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               value={text}
               onChange={(event) => {
@@ -176,10 +175,10 @@ export function Board({
               }}
               placeholder={stagedTags.length > 0 || stagedExclude.length > 0 ? "Add a tag… (-tag excludes)" : "Search tags… (-tag excludes)"}
               aria-label="Search the board"
-              className="h-10 w-full rounded-lg border border-border-strong bg-surface pr-3 pl-9 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              className="w-full rounded-[0.5rem] border border-border-strong bg-surface px-[0.7rem] py-2 text-[0.9rem] outline-none placeholder:text-muted-foreground"
             />
             {focused && offered.length > 0 && (
-              <ul className="absolute top-[calc(100%+0.3rem)] right-0 left-0 z-20 m-0 list-none rounded-lg border border-border bg-surface p-1">
+              <ul className="absolute top-[calc(100%+0.3rem)] right-0 left-0 z-20 m-0 list-none rounded-[0.5rem] border border-border bg-surface p-1">
                 {offered.map((item, index) => (
                   <li key={item.tag} className="flex items-stretch gap-0.5">
                     <button
@@ -228,8 +227,10 @@ export function Board({
               type="button"
               onClick={applyText}
               className={cn(
-                "h-9 cursor-pointer rounded-md border px-3 text-sm font-semibold",
-                dirty ? "border-accent bg-accent text-accent-foreground" : "border-accent bg-surface text-accent",
+                "cursor-pointer rounded-[0.45rem] border px-[0.8rem] py-[0.45rem] text-[0.85rem] font-semibold",
+                dirty
+                  ? "border-accent bg-accent text-accent-foreground hover:brightness-105"
+                  : "border-accent bg-surface text-accent hover:bg-selection",
               )}
             >
               Filter
@@ -243,7 +244,7 @@ export function Board({
                   setStagedExclude([]);
                   commit({ tags: [], exclude: [], q: "", sort: filter.sort, cleared: true }, true);
                 }}
-                className="h-9 cursor-pointer rounded-md border border-danger px-3 text-sm font-semibold text-danger hover:bg-selection"
+                className="cursor-pointer rounded-[0.45rem] border border-danger px-[0.8rem] py-[0.45rem] text-[0.85rem] font-semibold text-danger hover:bg-[color-mix(in_srgb,var(--danger)_14%,var(--surface))]"
               >
                 Clear
               </button>
@@ -258,7 +259,7 @@ export function Board({
                     true,
                   );
                 }}
-                className="h-9 cursor-pointer rounded-md border border-accent bg-selection px-3 text-sm font-semibold"
+                className="cursor-pointer rounded-[0.45rem] border border-accent bg-selection px-[0.8rem] py-[0.45rem] text-[0.85rem] font-semibold hover:bg-[color-mix(in_srgb,var(--accent)_28%,var(--surface))]"
               >
                 My defaults
               </button>
@@ -391,10 +392,10 @@ export function Board({
           <Sparkles className="size-7 text-accent" />
           <p className="m-0 max-w-sm text-sm">
             {saved
-              ? "Nothing saved yet. Open a picture and save it."
+              ? "No saved pictures yet."
               : filterActive(filter)
-                ? "Nothing matches this filter."
-                : "The board is quiet. Safebooru seeds land here: yuri, cute, anime girl, cyberpunk."}
+                ? "No pictures match this search."
+                : "No pictures yet."}
           </p>
         </div>
       )}
@@ -460,7 +461,7 @@ function FilterChip({
 
 function Segment({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex overflow-hidden rounded-md border border-border-strong">
+    <div role="group" aria-label={label} className="inline-flex overflow-hidden rounded-[0.45rem] border border-border-strong">
       {children}
     </div>
   );

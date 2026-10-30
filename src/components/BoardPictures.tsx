@@ -45,7 +45,7 @@ export function Picture({ post, href }: { post: ListedPost; href: string }) {
 
 export function PictureRow({ post, href, onTag }: { post: ListedPost; href: string; onTag: (tag: string) => void }) {
   return (
-    <article className="flex min-w-0 gap-4 rounded-xl border border-border bg-surface p-3 max-[640px]:flex-col">
+    <article className="flex min-w-0 gap-4 rounded-[0.6rem] border border-border bg-surface p-3 max-[640px]:flex-col">
       <a href={href} className="block w-60 shrink-0 overflow-hidden rounded-md bg-surface-soft max-[640px]:w-full" aria-label="Open post">
         <img src={thumbSrc(post)} alt="" className="h-[10.5rem] w-full object-cover max-[640px]:h-52" loading="lazy" />
       </a>

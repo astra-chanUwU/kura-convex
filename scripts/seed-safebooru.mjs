@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import {
   CreateBucketCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   PutBucketCorsCommand,
   PutBucketPolicyCommand,
   PutObjectCommand,
@@ -160,44 +161,68 @@ function normalize(post) {
 
 async function download(post) {
   try {
-    const response = await fetch(post.url, { headers: { "user-agent": "kura-convex-seed/0.1" } });
-    if (!response.ok) return null;
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length === 0 || bytes.length > 20 * 1024 * 1024) return null;
-    const ext = extension(post.url, response.headers.get("content-type"));
-    const storageKey = `images/safebooru/${post.id}.${ext}`;
-    await s3.send(
-      new PutObjectCommand({
-        Bucket: BUCKET,
-        Key: storageKey,
-        Body: bytes,
-        ContentType: contentType(ext),
-      }),
-    );
-    let thumbKey;
+    const guessed = extension(post.url, null);
+    const storageKey = `images/safebooru/${post.id}.${guessed}`;
+    const existing = await objectHead(storageKey);
+    let byteSize = existing?.ContentLength ?? 0;
+    let type = existing?.ContentType || contentType(guessed);
+    if (!byteSize) {
+      const response = await fetch(post.url, { headers: { "user-agent": "kura-convex-seed/0.1" } });
+      if (!response.ok) return null;
+      const bytes = Buffer.from(await response.arrayBuffer());
+      if (bytes.length === 0 || bytes.length > 20 * 1024 * 1024) return null;
+      const ext = extension(post.url, response.headers.get("content-type"));
+      const key = `images/safebooru/${post.id}.${ext}`;
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: BUCKET,
+          Key: key,
+          Body: bytes,
+          ContentType: contentType(ext),
+        }),
+      );
+      return finish(post, key, bytes.length, contentType(ext));
+    }
+    return finish(post, storageKey, byteSize, type);
+  } catch (error) {
+    console.error(`Skip ${post.id}: ${error instanceof Error ? error.message : error}`);
+    return null;
+  }
+}
+
+async function finish(post, storageKey, byteSize, type) {
+  const thumbName = storageKey.replace(/\.[^.]+$/, ".thumb.webp");
+  const thumb = await objectHead(thumbName);
+  let thumbKey = thumb?.ContentLength ? thumbName : undefined;
+  if (!thumbKey) {
     try {
       thumbKey = (await requestThumbnail(storageKey, env)).thumbKey;
     } catch (error) {
       console.error(`Thumb ${post.id}: ${error instanceof Error ? error.message : error}`);
     }
-    return {
-      safebooruId: post.id,
-      storageKey,
-      ...(thumbKey ? { thumbKey } : {}),
-      contentType: contentType(ext),
-      byteSize: bytes.length,
-      width: post.width,
-      height: post.height,
-      originalName: post.name.slice(0, 180),
-      artist: "",
-      source: post.page,
-      caption: post.caption.slice(0, 500),
-      rating: "safe",
-      createdAt: post.change * 1000 + (post.id % 1000),
-      tags: post.tags.slice(0, 16),
-    };
-  } catch (error) {
-    console.error(`Skip ${post.id}: ${error instanceof Error ? error.message : error}`);
+  }
+  return {
+    safebooruId: post.id,
+    storageKey,
+    ...(thumbKey ? { thumbKey } : {}),
+    contentType: type,
+    byteSize,
+    width: post.width,
+    height: post.height,
+    originalName: post.name.slice(0, 180),
+    artist: "",
+    source: post.page,
+    caption: post.caption.slice(0, 500),
+    rating: "safe",
+    createdAt: post.change * 1000 + (post.id % 1000),
+    tags: post.tags.slice(0, 16),
+  };
+}
+
+async function objectHead(key) {
+  try {
+    return await s3.send(new HeadObjectCommand({ Bucket: BUCKET, Key: key }));
+  } catch {
     return null;
   }
 }

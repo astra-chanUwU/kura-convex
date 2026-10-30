@@ -44,6 +44,22 @@ export const postCard = v.object({
   favorite: v.boolean(),
 });
 
+export const changeAction = v.union(
+  v.literal("post.created"),
+  v.literal("post.updated"),
+  v.literal("post.removed"),
+  v.literal("rollback"),
+);
+
+export const postSnapshot = v.object({
+  artist: v.string(),
+  caption: v.string(),
+  source: v.string(),
+  tags: v.array(v.string()),
+  rating,
+  removed: v.boolean(),
+});
+
 export const postDetail = v.object({
   _id: v.id("posts"),
   storageKey: v.string(),
@@ -62,6 +78,10 @@ export const postDetail = v.object({
   safebooruId: v.union(v.number(), v.null()),
   favorite: v.boolean(),
   mine: v.boolean(),
+  canRemove: v.boolean(),
+  canEdit: v.boolean(),
+  removed: v.boolean(),
+  authorName: v.union(v.string(), v.null()),
 });
 
 export const tagCount = v.object({

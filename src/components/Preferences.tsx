@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { AccountSecurity } from "@/components/AccountSecurity";
 import { errorText } from "@/lib/errors";
-import type { FontId, ThemeId } from "@/lib/appearance";
+import { FONT_LABELS, THEME_LABELS, type FontId, type ThemeId } from "@/lib/appearance";
 import { roleLabel } from "../../shared/roles";
 
 export function Preferences({
@@ -28,7 +28,7 @@ export function Preferences({
         <p className="m-0 text-sm text-muted-foreground">Sign in to edit the filters this board reads.</p>
         <a
           href="#/auth"
-          className="inline-flex h-9 w-fit items-center rounded-md border border-border-strong bg-surface-soft px-3.5 text-sm text-foreground no-underline hover:bg-selection"
+          className="inline-flex w-fit items-center rounded-[0.4rem] border border-border-strong bg-surface-soft px-[0.9rem] py-[0.55rem] text-[0.9rem] text-foreground no-underline hover:bg-selection"
         >
           Sign in
         </a>
@@ -45,9 +45,41 @@ export function Preferences({
       <p className="m-0 text-sm text-muted-foreground">
         Saved on your account. Default tags fill an empty board, and My defaults on the board jumps back to them.
       </p>
-      <PreferencesForm prefs={prefs} theme={theme} font={font} onAppearance={onAppearance} />
+      <PreferencesForm prefs={prefs} theme={theme} font={font} />
+      <AppearanceSample theme={theme} font={font} onAppearance={onAppearance} />
       <AccountSecurity />
     </section>
+  );
+}
+
+function AppearanceSample({
+  theme,
+  font,
+  onAppearance,
+}: {
+  theme: ThemeId;
+  font: FontId;
+  onAppearance: (next: Partial<{ theme: ThemeId; font: FontId }>) => void;
+}) {
+  return (
+    <div className="grid max-w-[26rem] gap-3 rounded-xl border border-border bg-surface p-4">
+      <h2 className="m-0 text-base font-semibold">Appearance</h2>
+      <p className="m-0 text-[0.85rem] text-muted-foreground">
+        Theme and font apply right away and stay with this account.
+      </p>
+      <AppearanceControls layout="stacked" theme={theme} font={font} onChange={onAppearance} />
+      <div
+        data-theme={theme}
+        data-font={font}
+        className="rounded-[0.6rem] border border-border bg-background px-[0.9rem] py-3 text-foreground"
+        style={{ fontFamily: "var(--font-body)" }}
+      >
+        <strong>Aa</strong> — The quick brown fox.{" "}
+        <span className="text-muted-foreground">
+          {THEME_LABELS[theme]} · {FONT_LABELS[font]}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -55,7 +87,6 @@ function PreferencesForm({
   prefs,
   theme,
   font,
-  onAppearance,
 }: {
   prefs: {
     displayName: string;
@@ -68,7 +99,6 @@ function PreferencesForm({
   };
   theme: ThemeId;
   font: FontId;
-  onAppearance: (next: Partial<{ theme: ThemeId; font: FontId }>) => void;
 }) {
   const save = useMutation(api.preferences.save);
   const [displayName, setDisplayName] = useState(prefs.displayName);
@@ -112,7 +142,6 @@ function PreferencesForm({
         <Label htmlFor="bio">Bio</Label>
         <Textarea id="bio" value={bio} onChange={(event) => setBio(event.target.value)} />
       </div>
-      <AppearanceControls theme={theme} font={font} onChange={onAppearance} />
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="grid gap-1.5">
           <Label htmlFor="location">Location</Label>

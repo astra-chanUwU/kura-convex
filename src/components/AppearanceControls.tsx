@@ -1,3 +1,4 @@
+import { ThemedSelect } from "@/components/ThemedSelect";
 import {
   FONT_LABELS,
   FONTS,
@@ -10,57 +11,48 @@ import {
   type ThemeId,
 } from "@/lib/appearance";
 import { cn } from "@/lib/utils";
-
-const selectClass =
-  "h-8 cursor-pointer rounded-md border border-border bg-surface px-2 text-[0.8rem] text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
+import styles from "./ThemedSelect.module.css";
 
 export function AppearanceControls({
   theme,
   font,
   onChange,
+  layout = "inline",
   className,
 }: {
   theme: ThemeId;
   font: FontId;
   onChange: (next: Partial<{ theme: ThemeId; font: FontId }>) => void;
+  layout?: "inline" | "stacked";
   className?: string;
 }) {
+  const stacked = layout === "stacked";
+  const themes = THEMES.map((id) => ({ value: id, label: THEME_LABELS[id], swatch: THEME_SWATCHES[id] }));
+  const fonts = FONTS.map((id) => ({ value: id, label: FONT_LABELS[id] }));
   return (
-    <div className={cn("flex items-center gap-2", className)}>
-      <label className="flex min-w-0 items-center gap-1.5">
-        <span
-          className="size-2.5 shrink-0 rounded-full border border-border-strong"
-          style={{ background: THEME_SWATCHES[theme] }}
-          aria-hidden
-        />
-        <span className="sr-only">Theme</span>
-        <select
-          aria-label="Theme"
+    <div className={cn(stacked ? "grid gap-3" : "flex min-w-0 items-center gap-2", className)}>
+      <label className={stacked ? "grid gap-1 text-[0.85rem] text-muted-foreground" : "contents"}>
+        {stacked ? "Theme" : <span className="sr-only">Theme</span>}
+        <ThemedSelect
+          label="Theme"
           value={theme}
-          onChange={(event) => onChange({ theme: normalizeTheme(event.target.value) })}
-          className={cn(selectClass, "max-w-[8.75rem] max-[700px]:max-w-[6.5rem]")}
-        >
-          {THEMES.map((id) => (
-            <option key={id} value={id}>
-              {THEME_LABELS[id]}
-            </option>
-          ))}
-        </select>
+          full={stacked}
+          className={stacked ? undefined : styles.compact}
+          options={themes}
+          onChange={(id) => onChange({ theme: normalizeTheme(id) })}
+        />
       </label>
-      <label className="flex min-w-0 items-center">
-        <span className="sr-only">Font</span>
-        <select
-          aria-label="Font"
+      <label className={stacked ? "grid gap-1 text-[0.85rem] text-muted-foreground" : "max-[640px]:hidden"}>
+        {stacked ? "Font" : <span className="sr-only">Font</span>}
+        <ThemedSelect
+          label="Font"
           value={font}
-          onChange={(event) => onChange({ font: normalizeFont(event.target.value) })}
-          className={cn(selectClass, "max-w-[12.5rem] max-[900px]:max-w-[8rem] max-[640px]:max-w-[5.75rem]")}
-        >
-          {FONTS.map((id) => (
-            <option key={id} value={id}>
-              {FONT_LABELS[id]}
-            </option>
-          ))}
-        </select>
+          full={stacked}
+          menuAlign={stacked ? "start" : "end"}
+          className={stacked ? undefined : styles.compactFont}
+          options={fonts}
+          onChange={(id) => onChange({ font: normalizeFont(id) })}
+        />
       </label>
     </div>
   );
