@@ -206,78 +206,117 @@ That reads `.env.production`, typechecks `convex/`, uploads those functions to `
 
 Copy `dist/` to the server and serve it at `https://kura.example.com`. `pnpm deploy:prod` does not copy that folder. `pnpm preview` only serves it at http://127.0.0.1:5175.
 
-## Run Convex on Convex's hosting
+## Run the backend on Convex Cloud
 
-Convex can host the database and the functions. You still host the pictures, the Go program, and the website. Convex's machines are not on your Docker network, so `http://thumbnails:8080` and `http://minio:9000` do not resolve there. The encoder and the bucket need public HTTPS addresses. The Go client uses path-style bucket URLs.
+Convex's [Vercel guide](https://docs.convex.dev/production/hosting/vercel) and [custom hosting guide](https://docs.convex.dev/production/hosting/custom) are the deploy. A project has a development deployment and a production deployment. `npx convex dev` writes the development deployment's name into `.env.local` as `CONVEX_DEPLOYMENT`. `npx convex deploy` uploads `convex/` to that project's production deployment. The frontend is a separate host. Convex does not serve it.
+
+This checkout's `.env.local` is the self-hosted Docker backend, so it has `CONVEX_SELF_HOSTED_URL` instead of `CONVEX_DEPLOYMENT`. The CLI rejects those together. `pnpm deploy:prod` is the self-hosted server above. The Cloud commands below use `.env.convex`, which holds only `CONVEX_DEPLOY_KEY`.
 
 ```
-This computer                         Convex's hosting
-┌──────────────────────────┐         ┌──────────────────────────────────┐
-│ git checkout             │         │ database and convex/ functions   │
-│   .env.convex            │─ key ──▶│ https://<name>.convex.cloud      │
-│   dist/                  │         │ https://<name>.convex.site       │
-└──────────────────────────┘         └──────────────┬───────────────────┘
-                                                    │ HTTPS
-Someone opening the site                            ▼
-  kura.example.com          dist/, on your host   Go thumbnail process
-  images.example.com        your bucket                 │
-  <name>.convex.cloud       queries                     ▼
-  <name>.convex.site        login                 your bucket
+Browser
+  │
+  ├── https://<name>.convex.cloud     production deployment (queries)
+  ├── https://<name>.convex.site      same deployment, HTTP actions (login)
+  ├── https://kura.example.com        dist/, your static host
+  └── https://<bucket-host>/kura-images
+           ▲
+           │  signed PUT from the browser, GET of the picture
+           │
+Production deployment
+  ensureThumb  ── HTTPS ──▶  thumbnails container (go/thumbnails)
+                                  │  path-style GET and PUT
+                                  └──▶  the same bucket
 ```
 
-`pnpm deploy:prod` uploads to the server in `.env.production`. It does not upload to Convex's hosting. That path uses `.env.convex`.
+`ensureThumb` in `convex/storage.ts` is the call. The process it calls is the `thumbnails` service in `docker-compose.yml`, image built from `go/thumbnails`. `pnpm thumbs` starts that service against the local bucket. The same container has to be running where the production deployment can open `KURA_THUMB_URL`.
 
-### Sign in and create the hosted database
+### Production deploy key
+
+On the [Convex dashboard](https://dashboard.convex.dev), open the project's production deployment. Deployment Settings, General tab, **Generate Production Deploy Key**. Enable the `deployment:deploy` permission, then copy the key.
+
+Copy `.env.convex.example` to `.env.convex`:
 
 ```sh
-pnpm exec convex login
+CONVEX_DEPLOY_KEY='prod:<deployment-name>|<key>'
 ```
 
-This opens a browser and connects the CLI to a Convex account.
+That file is the production deployment for every command below. It does not contain `CONVEX_SELF_HOSTED_URL` or `CONVEX_SELF_HOSTED_ADMIN_KEY`.
 
-In the [Convex dashboard](https://dashboard.convex.dev), create a project. A project is one hosted database. After it exists, the dashboard shows two addresses:
+### Bucket
 
-| Address | Role |
-| --- | --- |
-| `https://<name>.convex.cloud` | Queries and mutations. This becomes `VITE_CONVEX_URL` |
-| `https://<name>.convex.site` | Login and other HTTP actions. This becomes `VITE_CONVEX_SITE_URL` |
+Convex's own file storage is not what this app uses. Their S3-compatible setup is the [R2 component](https://github.com/get-convex/r2): create a bucket, add a CORS policy that allows `GET` and `PUT`, create an API token with object read and write, then store the endpoint, bucket, access key, and secret on the deployment with `npx convex env set`.
 
-In the project settings, generate a production deploy key. The key looks like `prod:<name>|<secret>`. It authorizes an upload to that hosted database. Copy `.env.convex.example` to `.env.convex` in the git checkout:
+`convex/storage.ts` reads a different set of names and signs with the AWS SDK, path-style. Set those on the production deployment. `npx convex env set` with no flag writes the dev deployment. `--prod` writes the production deployment of whatever project `CONVEX_DEPLOYMENT` names. This checkout has no `CONVEX_DEPLOYMENT`, so the flag that reaches the key in `.env.convex` is `--env-file .env.convex`.
 
 ```sh
-CONVEX_DEPLOY_KEY='prod:<name>|<secret>'
-```
-
-Leave `CONVEX_SELF_HOSTED_URL` and `CONVEX_SELF_HOSTED_ADMIN_KEY` out of `.env.convex`. `.env.local` stays the local Docker backend.
-
-### Store the picture and thumbnail addresses
-
-`convex env set --env-file .env.convex` uses the deploy key, so the values land in the hosted database.
-
-```sh
-pnpm exec convex env set --env-file .env.convex SITE_URL https://kura.example.com
-pnpm exec convex env set --env-file .env.convex BETTER_AUTH_SECRET <long random string>
-pnpm exec convex env set --env-file .env.convex KURA_S3_ENDPOINT https://images.example.com
-pnpm exec convex env set --env-file .env.convex KURA_S3_PUBLIC_ENDPOINT https://images.example.com
+pnpm exec convex env set --env-file .env.convex KURA_S3_ENDPOINT 'https://s3.<region>.amazonaws.com'
+pnpm exec convex env set --env-file .env.convex KURA_S3_PUBLIC_ENDPOINT 'https://s3.<region>.amazonaws.com'
 pnpm exec convex env set --env-file .env.convex KURA_S3_BUCKET kura-images
-pnpm exec convex env set --env-file .env.convex KURA_S3_ACCESS_KEY_ID <access key>
-pnpm exec convex env set --env-file .env.convex KURA_S3_SECRET_ACCESS_KEY <secret>
-pnpm exec convex env set --env-file .env.convex KURA_THUMB_URL https://thumbs.example.com
-pnpm exec convex env set --env-file .env.convex KURA_THUMB_SECRET <shared secret>
+pnpm exec convex env set --env-file .env.convex KURA_S3_ACCESS_KEY_ID '<access key id>'
+pnpm exec convex env set --env-file .env.convex KURA_S3_SECRET_ACCESS_KEY '<secret access key>'
 ```
 
-`KURA_THUMB_URL` is the public address of the Go process. On the host that runs it, set `KURA_THUMB_SECRET` to the same string, and set `KURA_S3_ENDPOINT`, `KURA_S3_BUCKET`, `KURA_S3_ACCESS_KEY_ID`, and `KURA_S3_SECRET_ACCESS_KEY` to that same bucket. `pnpm thumbs` is only the local Docker build of that program.
+| Variable | R2 component name | What `convex/storage.ts` does with it |
+| --- | --- | --- |
+| `KURA_S3_ENDPOINT` | `R2_ENDPOINT` | HEAD and DELETE from the action |
+| `KURA_S3_PUBLIC_ENDPOINT` | same endpoint, public | Host baked into the browser's signed PUT |
+| `KURA_S3_BUCKET` | `R2_BUCKET` | Bucket name |
+| `KURA_S3_ACCESS_KEY_ID` | `R2_ACCESS_KEY_ID` | SigV4 access key |
+| `KURA_S3_SECRET_ACCESS_KEY` | `R2_SECRET_ACCESS_KEY` | SigV4 secret |
 
-### Upload the functions and publish the site
+For R2 the endpoint is `https://<account-id>.r2.cloudflarestorage.com`. For AWS it is `https://s3.<region>.amazonaws.com`. Both clients in this repo use path-style (`forcePathStyle` in the action, `BucketLookupPath` in `go/thumbnails`), so the object URL is `https://<endpoint>/<bucket>/<key>`.
 
-`pnpm build` reads `.env.production` when that file is present. For this upload, set the public site addresses in the shell first, so a self-hosted `.env.production` is not copied into the hosted build. The deploy command fills in `VITE_CONVEX_URL` from the hosted database.
+CORS on the bucket has to allow the website origin, `GET` and `PUT`, and header `Content-Type`. The R2 readme's policy is the shape. Put the real site origin in `AllowedOrigins`.
+
+The `thumbnails` service in `docker-compose.yml` has the local endpoint and the local key written on the service, not taken from the shell:
+
+```yaml
+KURA_S3_ENDPOINT: http://host.docker.internal:9000
+KURA_S3_BUCKET: kura-images
+KURA_S3_ACCESS_KEY_ID: kura
+KURA_S3_SECRET_ACCESS_KEY: kura-secret-key
+```
+
+Replace those four with the bucket endpoint, bucket name, and the same access key before starting the container against that bucket. `KURA_THUMB_SECRET` on that service is already `${KURA_THUMB_SECRET}`.
+
+### Thumbnail service
+
+`ensureThumb` POSTs to `${KURA_THUMB_URL}/v1/thumbnails/batch` with `Authorization: Bearer ${KURA_THUMB_SECRET}`. The handler is `POST /v1/thumbnails/batch` in `go/thumbnails`. After the container is up, put HTTPS in front of its port 5006 and store that address on the production deployment. The secret is the same string as `KURA_THUMB_SECRET` on the container.
+
+```sh
+pnpm exec convex env set --env-file .env.convex KURA_THUMB_URL 'https://thumbs.example.com'
+pnpm exec convex env set --env-file .env.convex KURA_THUMB_SECRET '<the container secret>'
+```
+
+The default in code, `http://thumbnails:8080`, is the Docker network name from the self-hosted stack. The production deployment has no such network.
+
+### Login and the website
+
+Functions already have `CONVEX_CLOUD_URL` and `CONVEX_SITE_URL`. `CONVEX_SITE_URL` looks like `https://<name>.convex.site`. Better Auth in `convex/auth.ts` also reads `SITE_URL`, which is the website origin, and `BETTER_AUTH_SECRET`.
+
+```sh
+pnpm exec convex env set --env-file .env.convex SITE_URL 'https://kura.example.com'
+pnpm exec convex env set --env-file .env.convex BETTER_AUTH_SECRET '<long random string>'
+```
+
+### Upload functions and build the site
+
+The [custom hosting guide](https://docs.convex.dev/production/hosting/custom) builds with the deployment URL injected, then you upload the built files yourself:
+
+```sh
+npx convex deploy --cmd 'npm run build' --cmd-url-env-var-name VITE_CONVEX_URL
+```
+
+That sets `VITE_CONVEX_URL` for the build, runs the build, then pushes `convex/`. This repo's build is `pnpm build`, and the command has to select `.env.convex` so it does not use the self-hosted `.env.local`.
+
+The deploy command sets one URL. This client also needs `VITE_CONVEX_SITE_URL` (`https://<name>.convex.site`, the same value as `CONVEX_SITE_URL`), `VITE_SITE_URL`, and `VITE_S3_PUBLIC_URL` (`https://s3.<region>.amazonaws.com/kura-images`, or the R2 equivalent). `pnpm build` reads `.env.production` when that file exists, and that file is the self-hosted server. Export these three first so they win.
 
 PowerShell:
 
 ```powershell
 $env:VITE_CONVEX_SITE_URL = "https://<name>.convex.site"
 $env:VITE_SITE_URL = "https://kura.example.com"
-$env:VITE_S3_PUBLIC_URL = "https://images.example.com/kura-images"
+$env:VITE_S3_PUBLIC_URL = "https://s3.<region>.amazonaws.com/kura-images"
 pnpm exec convex deploy --env-file .env.convex --cmd "pnpm build" --cmd-url-env-var-name VITE_CONVEX_URL
 ```
 
@@ -286,13 +325,13 @@ POSIX shell:
 ```sh
 export VITE_CONVEX_SITE_URL='https://<name>.convex.site'
 export VITE_SITE_URL='https://kura.example.com'
-export VITE_S3_PUBLIC_URL='https://images.example.com/kura-images'
+export VITE_S3_PUBLIC_URL='https://s3.<region>.amazonaws.com/kura-images'
 pnpm exec convex deploy --env-file .env.convex --cmd "pnpm build" --cmd-url-env-var-name VITE_CONVEX_URL
 ```
 
-Copy `dist/` to whatever serves `https://kura.example.com`.
+Publish `dist/` at `https://kura.example.com`. On Vercel, the same build is the project's Build Command, and `CONVEX_DEPLOY_KEY` is an environment variable scoped to Production, which is the setup in their Vercel guide. Their guide's command is `npx convex deploy --cmd 'npm run build'`. Use `pnpm build` and `--cmd-url-env-var-name VITE_CONVEX_URL` here.
 
-Later CLI commands for this hosted database also pass `--env-file .env.convex`. `--prod` looks for `CONVEX_DEPLOYMENT` in `.env.local`, and this checkout does not have that variable.
+Dashboard env changes and later CLI calls for this deployment use `--env-file .env.convex` as well. `npx convex env set --prod` is their documented flag, and it follows `CONVEX_DEPLOYMENT` in `.env.local`.
 
 ## Seed
 
