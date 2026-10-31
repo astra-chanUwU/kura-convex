@@ -3,6 +3,7 @@ import { Heart } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { ListMenu } from "@/components/ListMenu";
 import { authClient } from "@/lib/auth-client";
 import { errorText } from "@/lib/errors";
 import { formatBytes, imageUrl, tagLabel } from "@/lib/images";
@@ -43,11 +44,16 @@ function Thumb({ post, alt, className }: { post: ListedPost; alt: string; classN
 
 export function Picture({ post, href }: { post: ListedPost; href: string }) {
   return (
-    <a href={href} className="relative block overflow-hidden rounded-xl border border-border bg-surface-soft">
-      <Thumb post={post} alt={post.caption || post.artist || "Picture"} className="aspect-[4/3] w-full object-cover" />
-      <SaveButton post={post} />
-      {post.rating !== "safe" && <RatingBadge rating={post.rating} />}
-    </a>
+    <div className="relative">
+      <a href={href} className="relative block overflow-hidden rounded-xl border border-border bg-surface-soft">
+        <Thumb post={post} alt={post.caption || post.artist || "Picture"} className="aspect-[4/3] w-full object-cover" />
+        {post.rating !== "safe" && <RatingBadge rating={post.rating} />}
+      </a>
+      <div className="pointer-events-none absolute top-2 right-2 z-10 flex flex-wrap justify-end gap-1">
+        <SaveButton post={post} />
+        <ListMenu postId={post._id} />
+      </div>
+    </div>
   );
 }
 
@@ -59,8 +65,11 @@ export function PictureRow({ post, href, onTag }: { post: ListedPost; href: stri
       </a>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-start justify-between gap-3">
-          <p className="m-0 font-bold break-words">{post.artist || post.caption || "Unknown artist"}</p>
-          <SaveButton post={post} inline />
+          <p className="m-0 min-w-0 font-bold break-words">{post.artist || post.caption || "Unknown artist"}</p>
+          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+            <SaveButton post={post} />
+            <ListMenu postId={post._id} />
+          </div>
         </div>
         <p className="m-0 text-sm text-muted-foreground">
           <span className={post.rating === "safe" ? "font-bold" : "font-bold text-danger"}>{post.rating.toUpperCase()}</span>
@@ -86,7 +95,7 @@ export function PictureRow({ post, href, onTag }: { post: ListedPost; href: stri
   );
 }
 
-function SaveButton({ post, inline }: { post: ListedPost; inline?: boolean }) {
+function SaveButton({ post }: { post: ListedPost }) {
   const toggle = useMutation(api.posts.toggleFavorite);
   const session = authClient.useSession();
   const [pending, setPending] = useState<boolean | null>(null);
@@ -104,8 +113,7 @@ function SaveButton({ post, inline }: { post: ListedPost; inline?: boolean }) {
       aria-label={saved ? "Remove from saved" : "Save"}
       title={error || "Saved pictures stay on your account"}
       className={cn(
-        "cursor-pointer rounded-md border border-border-strong bg-surface px-2 py-1 text-[0.8rem]",
-        !inline && "absolute top-2 right-2",
+        "pointer-events-auto shrink-0 cursor-pointer rounded-md border border-border-strong bg-surface px-2 py-1 text-[0.8rem]",
         saved && "border-accent text-accent",
         error && "border-danger text-danger",
       )}

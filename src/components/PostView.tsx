@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Heart, Pencil, Trash2 } from "lucide-react";
 import { Component, type ReactNode, useState } from "react";
 import type { Id } from "../../convex/_generated/dataModel";
+import { ListMenu } from "@/components/ListMenu";
 import { PostEditor } from "@/components/PostHistory";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,6 +74,20 @@ function PostBody({
   const artistTag = normalizeTag(post.artist);
   const categories = new Map((tagLookup ?? []).map((row) => [row.tag, row.category]));
   const curator = canCurate(prefs?.role);
+  const showActions = (post.canEdit && !editing) || (post.mine && post.canRemove);
+
+  function toggleSave() {
+    if (!post) return;
+    setError("");
+    void toggle({ postId: post._id }).catch((caught) => {
+      const text = errorText(caught, "Could not update Saved.");
+      if (text === "Sign in to do that.") {
+        window.location.hash = "#/auth";
+        return;
+      }
+      setError(text);
+    });
+  }
 
   return (
     <>
@@ -80,7 +95,7 @@ function PostBody({
       <div className="grid min-w-0 gap-4">
         <a href={back} className="inline-flex w-fit items-center gap-2 text-[0.9rem] no-underline hover:text-accent">
           <ArrowLeft className="size-4" />
-          {authorId ? "Back" : "Board"}
+          {back.startsWith("#/lists/") ? "List" : authorId ? "Back" : "Board"}
         </a>
         <PostErrorBoundary key={id} fallback={null}>
           <PostNeighbors id={id} filter={filter} saved={saved} authorId={authorId} />
@@ -125,7 +140,23 @@ function PostBody({
           </p>
         )}
         <p className="m-0 text-sm text-muted-foreground">
-          {post.width}×{post.height} · {formatBytes(post.byteSize)} · {post.favoriteCount} saves
+          {post.width}×{post.height} · {formatBytes(post.byteSize)}
+          {" · "}
+          <button
+            type="button"
+            aria-pressed={post.favorite}
+            aria-label={post.favorite ? "Remove from Saved" : "Add to Saved"}
+            title={error || "Adds this picture to Saved"}
+            onClick={toggleSave}
+            className={cn(
+              "inline-flex cursor-pointer items-center gap-1 rounded-sm px-0.5 align-[-0.125em] text-inherit hover:text-foreground",
+              post.favorite && "text-accent",
+            )}
+          >
+            <Heart className={cn("size-3.5", post.favorite && "fill-current")} />
+            {post.favoriteCount} {post.favoriteCount === 1 ? "save" : "saves"}
+          </button>{" "}
+          <ListMenu postId={post._id} />
         </p>
         {!editing && post.artist && (
           <Detail label="Artist">
@@ -168,24 +199,8 @@ function PostBody({
             </div>
           </Detail>
         )}
+        {showActions && (
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant={post.favorite ? "accent" : "outline"}
-            onClick={() => {
-              setError("");
-              void toggle({ postId: post._id }).catch((caught) => {
-                const text = errorText(caught, "Could not save that picture.");
-                if (text === "Sign in to do that.") {
-                  window.location.hash = "#/auth";
-                  return;
-                }
-                setError(text);
-              });
-            }}
-          >
-            <Heart className={cn("size-4", post.favorite && "fill-current")} />
-            {post.favorite ? "Saved" : "Save"}
-          </Button>
           {post.canEdit && !editing && (
             <Button variant="outline" onClick={() => setEditing(true)}>
               <Pencil className="size-4" />
@@ -210,6 +225,7 @@ function PostBody({
             </Button>
           )}
         </div>
+        )}
         {savedNote && !editing && <p className="m-0 text-sm text-success">{savedNote}</p>}
         {error && <p className="m-0 text-sm text-danger">{error}</p>}
         {editing ? (

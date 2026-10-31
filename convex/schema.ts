@@ -4,6 +4,7 @@ import {
   accountRole,
   changeAction,
   font,
+  listVisibility,
   postSnapshot,
   rating,
   savedRating,
@@ -94,6 +95,28 @@ export default defineSchema({
   })
     .index("by_user_post", ["userId", "postId"])
     .index("by_user_createdAt", ["userId", "createdAt"])
+    .index("by_post", ["postId"]),
+
+  lists: defineTable({
+    userId: v.string(),
+    title: v.string(),
+    description: v.string(),
+    visibility: listVisibility,
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    itemCount: v.number(),
+  })
+    .index("by_user_updatedAt", ["userId", "updatedAt"])
+    .index("by_user_visibility_updatedAt", ["userId", "visibility", "updatedAt"]),
+
+  listItems: defineTable({
+    listId: v.id("lists"),
+    postId: v.id("posts"),
+    position: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_list_position", ["listId", "position"])
+    .index("by_list_post", ["listId", "postId"])
     .index("by_post", ["postId"]),
 
   preferences: defineTable({

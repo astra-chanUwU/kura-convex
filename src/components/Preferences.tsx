@@ -3,7 +3,9 @@ import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { AppearanceControls } from "@/components/AppearanceControls";
 import { Button } from "@/components/ui/button";
+import { Dialog } from "@/components/ui/dialog";
 import { Input, Label, Textarea } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { AccountSecurity } from "@/components/AccountSecurity";
 import { errorText } from "@/lib/errors";
 import { FONT_LABELS, THEME_LABELS, type FontId, type ThemeId } from "@/lib/appearance";
@@ -164,8 +166,33 @@ function PreferencesForm({
   const [exclude, setExclude] = useState(prefs.excludeTags.join(" "));
   const [location, setLocation] = useState(prefs.location);
   const [website, setWebsite] = useState(prefs.website);
+  const [showSensitive, setShowSensitive] = useState(prefs.showSensitive);
+  const [askAge, setAskAge] = useState(false);
   const [notice, setNotice] = useState("");
   const [failed, setFailed] = useState(false);
+
+  function saveSensitive(next: boolean) {
+    setFailed(false);
+    void save({
+      displayName: prefs.displayName,
+      bio: prefs.bio,
+      location: prefs.location,
+      website: prefs.website,
+      theme,
+      font,
+      showSensitive: next,
+      includeTags: prefs.includeTags,
+      excludeTags: prefs.excludeTags,
+    })
+      .then(() => {
+        setShowSensitive(next);
+        setNotice(next ? "Sensitive pictures are visible." : "Sensitive pictures are hidden.");
+      })
+      .catch((caught) => {
+        setFailed(true);
+        setNotice(errorText(caught, "Could not save that setting."));
+      });
+  }
 
   return (
     <form
@@ -180,7 +207,7 @@ function PreferencesForm({
           website,
           theme,
           font,
-          showSensitive: prefs.showSensitive,
+          showSensitive,
           includeTags: include.split(/\s+/).filter(Boolean),
           excludeTags: exclude.split(/\s+/).filter(Boolean),
         })
@@ -227,10 +254,44 @@ function PreferencesForm({
         <Label htmlFor="exclude">Default exclusions</Label>
         <Input id="exclude" value={exclude} onChange={(event) => setExclude(event.target.value)} />
       </div>
+      <label className="flex items-center justify-between gap-3 text-sm">
+        Show sensitive pictures
+        <Switch
+          checked={showSensitive}
+          onCheckedChange={(checked) => {
+            if (checked) setAskAge(true);
+            else saveSensitive(false);
+          }}
+          aria-label="Show sensitive pictures"
+        />
+      </label>
       <Button type="submit" className="w-fit">
         Save preferences
       </Button>
       {notice && <p className={failed ? "m-0 text-sm text-danger" : "m-0 text-sm text-accent-soft"}>{notice}</p>}
+      <Dialog
+        open={askAge}
+        onClose={() => setAskAge(false)}
+        title="Are you over 18?"
+        description="Sensitive pictures stay hidden until you confirm you are over 18."
+        className="max-w-sm"
+      >
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => setAskAge(false)}>
+            Keep hidden
+          </Button>
+          <Button
+            type="button"
+            variant="accent"
+            onClick={() => {
+              setAskAge(false);
+              saveSensitive(true);
+            }}
+          >
+            Yes, show them
+          </Button>
+        </div>
+      </Dialog>
     </form>
   );
 }

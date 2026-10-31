@@ -13,6 +13,7 @@ import type * as auth from "../auth.js";
 import type * as authz from "../authz.js";
 import type * as history from "../history.js";
 import type * as http from "../http.js";
+import type * as lists from "../lists.js";
 import type * as maintenance from "../maintenance.js";
 import type * as posts from "../posts.js";
 import type * as preferences from "../preferences.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   authz: typeof authz;
   history: typeof history;
   http: typeof http;
+  lists: typeof lists;
   maintenance: typeof maintenance;
   posts: typeof posts;
   preferences: typeof preferences;

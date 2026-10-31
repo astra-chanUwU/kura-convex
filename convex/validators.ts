@@ -64,6 +64,20 @@ export const postCard = v.object({
   favoriteCount: v.number(),
 });
 
+export const listVisibility = v.union(v.literal("private"), v.literal("public"));
+
+export const listSummary = v.object({
+  _id: v.id("lists"),
+  title: v.string(),
+  description: v.string(),
+  visibility: listVisibility,
+  itemCount: v.number(),
+  updatedAt: v.number(),
+  ownerId: v.string(),
+  ownerName: v.string(),
+  mine: v.boolean(),
+});
+
 export const changeAction = v.union(
   v.literal("post.created"),
   v.literal("post.updated"),

@@ -122,5 +122,25 @@ export async function deletePostGraph(ctx: MutationCtx, postId: Id<"posts">) {
     .withIndex("by_post", (q) => q.eq("postId", postId))
     .take(100);
   for (const fav of favs) await ctx.db.delete(fav._id);
+  const memberships = await ctx.db
+    .query("listItems")
+    .withIndex("by_post", (q) => q.eq("postId", postId))
+    .take(200);
+  const removedByList = new Map<Id<"lists">, number>();
+  for (const membership of memberships) {
+    await ctx.db.delete(membership._id);
+    removedByList.set(membership.listId, (removedByList.get(membership.listId) ?? 0) + 1);
+  }
+  if (removedByList.size > 0) {
+    const updatedAt = Date.now();
+    for (const [listId, removed] of removedByList) {
+      const list = await ctx.db.get(listId);
+      if (!list) continue;
+      await ctx.db.patch(listId, {
+        itemCount: Math.max(0, list.itemCount - removed),
+        updatedAt,
+      });
+    }
+  }
   await ctx.db.delete(postId);
 }

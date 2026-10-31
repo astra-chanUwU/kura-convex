@@ -7,7 +7,6 @@ import { RecoverAccount } from "@/components/RecoverAccount";
 import { Board } from "@/components/Board";
 import { PostView } from "@/components/PostView";
 import { Preferences } from "@/components/Preferences";
-import { SettingsMenu } from "@/components/SettingsMenu";
 import { UploadDialog } from "@/components/UploadDialog";
 import { useAppearance } from "@/hooks/useAppearance";
 import type { FontId, ThemeId } from "@/lib/appearance";
@@ -24,17 +23,21 @@ import {
   type BoardView,
 } from "@/lib/board";
 import { HistoryPage } from "@/components/HistoryPage";
+import { ListView } from "@/components/ListView";
+import { ListsPage } from "@/components/ListsPage";
 import { PostHistory } from "@/components/PostHistory";
 import { PostModeration } from "@/components/PostModeration";
-import { UploaderHeader } from "@/components/UploaderPage";
+import { PublicLists, UploaderHeader } from "@/components/UploaderPage";
 import { errorText } from "@/lib/errors";
 import { canModerate, canUpload } from "../shared/roles";
 import { cn } from "@/lib/utils";
 
 type Route =
   | { name: "board"; saved: boolean; filter: BoardFilter }
-  | { name: "post"; id: string; saved: boolean; filter: BoardFilter; authorId?: string }
+  | { name: "post"; id: string; saved: boolean; filter: BoardFilter; authorId?: string; listId?: string }
   | { name: "user"; userId: string; filter: BoardFilter }
+  | { name: "lists" }
+  | { name: "list"; id: string }
   | { name: "preferences" }
   | { name: "history" }
   | { name: "auth"; mode: "sign-in" | "sign-up" }
@@ -48,12 +51,14 @@ function parseHash(hash: string): Route {
   const saved = path.startsWith("/saved") || params.get("saved") === "1";
   if (path.startsWith("/posts/")) {
     const author = params.get("author") ?? "";
+    const listId = params.get("list")?.trim() ?? "";
     return {
       name: "post",
       id: decodeURIComponent(path.slice("/posts/".length)),
       saved,
       filter,
       ...(author ? { authorId: decodeURIComponent(author) } : {}),
+      ...(listId ? { listId } : {}),
     };
   }
   if (path.startsWith("/preferences")) return { name: "preferences" };
@@ -64,6 +69,12 @@ function parseHash(hash: string): Route {
   }
   if (path.startsWith("/u/")) {
     return { name: "user", userId: decodeURIComponent(path.slice("/u/".length)), filter };
+  }
+  if (path === "/lists" || path === "/lists/") return { name: "lists" };
+  if (path.startsWith("/lists/")) {
+    const id = decodeURIComponent(path.slice("/lists/".length));
+    if (id) return { name: "list", id };
+    return { name: "lists" };
   }
   return { name: "board", saved: path.startsWith("/saved"), filter };
 }
@@ -135,7 +146,11 @@ function Kura() {
 
   const name = account?.name || prefs?.displayName || "Account";
   const boardSaved = route.name === "board" ? route.saved : route.name === "post" ? route.saved : false;
-  const wideBoard = (route.name === "board" || route.name === "user") && view.wide;
+  const wideBoard = (route.name === "board" || route.name === "user" || route.name === "list") && view.wide;
+  function applyView(next: BoardView) {
+    setView(next);
+    writeBoardView(next);
+  }
   function startUpload() {
     if (!signedIn) {
       window.location.hash = "#/auth";
@@ -172,6 +187,11 @@ function Kura() {
           <a href="#/saved" className={navClass(boardSaved && (route.name === "board" || route.name === "post"))}>
             Saved
           </a>
+          {signedIn && (
+            <a href="#/lists" className={navClass(route.name === "lists" || route.name === "list")}>
+              Lists
+            </a>
+          )}
           {canModerate(prefs?.role) && (
             <a href="#/history" className={navClass(route.name === "history")}>
               History
@@ -200,7 +220,6 @@ function Kura() {
         </nav>
         <div className="ml-auto flex min-w-0 items-center gap-2">
           <AppearanceControls theme={theme} font={font} onChange={change} />
-          <SettingsMenu onPreferences={() => (window.location.hash = "#/preferences")} />
         </div>
       </header>
       {(appearanceError || uploadNote) && (
@@ -224,10 +243,7 @@ function Kura() {
             showSensitive={prefs?.showSensitive === true}
             defaults={prefs?.signedIn ? { tags: prefs.includeTags, exclude: prefs.excludeTags } : null}
             view={view}
-            onView={(next) => {
-              setView(next);
-              writeBoardView(next);
-            }}
+            onView={applyView}
             onUpload={startUpload}
             signedIn={signedIn}
           />
@@ -235,6 +251,7 @@ function Kura() {
         {route.name === "user" && (
           <>
             <UploaderHeader userId={route.userId} />
+            <PublicLists userId={route.userId} />
             <Board
               key={boardKey(false, route.filter, route.userId)}
               filter={route.filter}
@@ -243,20 +260,25 @@ function Kura() {
               showSensitive={prefs?.showSensitive === true}
               defaults={prefs?.signedIn ? { tags: prefs.includeTags, exclude: prefs.excludeTags } : null}
               view={view}
-              onView={(next) => {
-                setView(next);
-                writeBoardView(next);
-              }}
+              onView={applyView}
               onUpload={startUpload}
               signedIn={signedIn}
             />
           </>
         )}
+        {route.name === "lists" && <ListsPage />}
+        {route.name === "list" && <ListView id={route.id} view={view} onView={applyView} />}
         {route.name === "post" && (
           <>
             <PostView
               id={route.id}
-              back={route.authorId ? userHash(route.authorId, route.filter) : boardHash(route.saved, route.filter)}
+              back={
+                route.listId
+                  ? `#/lists/${encodeURIComponent(route.listId)}`
+                  : route.authorId
+                    ? userHash(route.authorId, route.filter)
+                    : boardHash(route.saved, route.filter)
+              }
               filter={route.filter}
               saved={route.saved}
               authorId={route.authorId}
