@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values";
 import type { AccountRole } from "../shared/roles";
-import { canModerate, canUpload } from "../shared/roles";
+import { canCurate, canModerate, canUpload } from "../shared/roles";
 import { internal } from "./_generated/api";
 import type { ActionCtx, MutationCtx, QueryCtx } from "./_generated/server";
 
@@ -38,6 +38,13 @@ export async function requirePoster(ctx: AuthCtx) {
   const userId = await requireUserId(ctx);
   const role = await roleFor(ctx, userId);
   if (!canUpload(role)) throw new ConvexError("Adding a picture needs a contributor account.");
+  return userId;
+}
+
+export async function requireCurator(ctx: DbCtx) {
+  const userId = await requireUserId(ctx);
+  const role = await roleFor(ctx, userId);
+  if (!canCurate(role)) throw new ConvexError("Curating tags needs a curator account.");
   return userId;
 }
 

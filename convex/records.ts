@@ -1,6 +1,9 @@
 import { ConvexError } from "convex/values";
+import { normalizeTag, type TagCategory } from "../shared/tags";
 import type { Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+
+type DbCtx = QueryCtx | MutationCtx;
 
 export function searchTextFor(post: {
   caption: string;
@@ -24,14 +27,14 @@ export function clipSource(value: string) {
   return source;
 }
 
-async function bumpTag(ctx: MutationCtx, tag: string, delta: number) {
+export async function bumpTag(ctx: MutationCtx, tag: string, delta: number, category?: TagCategory) {
   const stat = await ctx.db
     .query("tagStats")
     .withIndex("by_tag", (q) => q.eq("tag", tag))
     .unique();
   if (delta > 0) {
     if (stat) await ctx.db.patch(stat._id, { count: stat.count + 1 });
-    else await ctx.db.insert("tagStats", { tag, count: 1 });
+    else await ctx.db.insert("tagStats", { tag, count: 1, ...(category ? { category } : {}) });
     return;
   }
   if (!stat) return;
@@ -67,13 +70,35 @@ export async function writeTags(
 ) {
   for (const tag of tags) {
     await ctx.db.insert("postTags", { postId, tag, createdAt });
-    const stat = await ctx.db
-      .query("tagStats")
-      .withIndex("by_tag", (q) => q.eq("tag", tag))
-      .unique();
-    if (stat) await ctx.db.patch(stat._id, { count: stat.count + 1 });
-    else await ctx.db.insert("tagStats", { tag, count: 1 });
+    await bumpTag(ctx, tag, 1);
   }
+}
+
+// One hop. A canonical that is itself an alias stays as written.
+export async function resolveTags(ctx: DbCtx, tags: string[]) {
+  const out: string[] = [];
+  for (const tag of tags) {
+    if (out.length >= 40) break;
+    const row = await ctx.db
+      .query("tagAliases")
+      .withIndex("by_alias", (q) => q.eq("alias", tag))
+      .unique();
+    const next = row?.canonical || tag;
+    if (!next || out.includes(next)) continue;
+    out.push(next);
+  }
+  return out;
+}
+
+export async function markArtistCategory(ctx: MutationCtx, artist: string, tags: string[]) {
+  const artistTag = normalizeTag(artist);
+  if (!artistTag || !tags.includes(artistTag)) return;
+  const stat = await ctx.db
+    .query("tagStats")
+    .withIndex("by_tag", (q) => q.eq("tag", artistTag))
+    .unique();
+  if (!stat || stat.category !== undefined) return;
+  await ctx.db.patch(stat._id, { category: "artist" });
 }
 
 // Hard delete. Board removal is soft (removedAt) so a rollback can restore the picture.

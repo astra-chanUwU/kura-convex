@@ -1,9 +1,11 @@
-import { usePaginatedQuery, useQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { ArrowUp, Sparkles, Upload } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api } from "../../convex/_generated/api";
 import { Picture, PictureRow } from "@/components/BoardPictures";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import {
   writeBoard,
   type BoardFilter,
@@ -14,6 +16,7 @@ import {
   sameTags,
   splitTagInput,
 } from "@/lib/board";
+import { errorText } from "@/lib/errors";
 import { tagLabel } from "@/lib/images";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +29,9 @@ export function Board({
   view,
   onView,
   onUpload,
+  showSensitive,
+  authorId,
+  signedIn,
 }: {
   filter: BoardFilter;
   saved: boolean;
@@ -33,6 +39,9 @@ export function Board({
   view: BoardView;
   onView: (view: BoardView) => void;
   onUpload: () => void;
+  showSensitive: boolean;
+  authorId?: string;
+  signedIn: boolean;
 }) {
   const [text, setText] = useState(filter.q);
   const [stagedTags, setStagedTags] = useState(filter.tags);
@@ -40,6 +49,9 @@ export function Board({
   const [focused, setFocused] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [showTop, setShowTop] = useState(false);
+  const [searchName, setSearchName] = useState("");
+  const [searchError, setSearchError] = useState("");
+  const [savingSearch, setSavingSearch] = useState(false);
   const sentinel = useRef<HTMLDivElement>(null);
   const listArgs = {
     q: filter.q || undefined,
@@ -47,12 +59,19 @@ export function Board({
     exclude: filter.exclude.length > 0 ? filter.exclude : undefined,
     sort: filter.sort,
     saved,
+    ...(filter.rating === "any" ? {} : { rating: filter.rating }),
+    ...(authorId ? { authorId } : {}),
   };
   const { results: items, status, loadMore } = usePaginatedQuery(api.posts.list, listArgs, { initialNumItems: pageSize });
   const suggestQuery = text.trim().replace(/^-/, "");
   const suggestions = useQuery(api.posts.suggest, focused && suggestQuery ? { q: suggestQuery } : "skip") ?? [];
+  const savedSearches = useQuery(api.savedSearches.list, signedIn ? {} : "skip") ?? [];
+  const saveSearch = useMutation(api.savedSearches.save);
+  const removeSearch = useMutation(api.savedSearches.remove);
   const offered = suggestions.filter((item) => !stagedTags.includes(item.tag) && !stagedExclude.includes(item.tag));
   const relevant = filter.q !== "" && filter.tags.length === 0;
+  const mostSaved = !saved && !authorId && filter.tags.length === 0;
+  const shownSort = filter.sort === "saved" && !mostSaved ? "newest" : filter.sort;
 
   useEffect(() => {
     if (status !== "CanLoadMore" || items.length >= pageSize) return;
@@ -98,12 +117,53 @@ export function Board({
     (!sameTags(stagedTags, defaults.tags) || !sameTags(stagedExclude, defaults.exclude) || text.trim() !== "");
 
   function commit(next: BoardFilter, scroll = false) {
-    writeBoard(saved, next);
+    const sort = next.sort === "saved" && (saved || !!authorId || next.tags.length > 0) ? "newest" : next.sort;
+    writeBoard(saved, { ...next, sort }, false, authorId);
     if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function applyText() {
     commit({ ...filter, tags: stagedTags, exclude: stagedExclude, q: text.trim(), cleared: false }, true);
+  }
+
+  function applySaved(search: (typeof savedSearches)[number]) {
+    setText(search.q);
+    setStagedTags(search.tags);
+    setStagedExclude(search.exclude);
+    commit(
+      {
+        tags: search.tags,
+        exclude: search.exclude,
+        q: search.q,
+        sort: search.sort,
+        rating: search.rating,
+        cleared: false,
+      },
+      true,
+    );
+  }
+
+  function storeSearch() {
+    const name = searchName.trim();
+    if (!name || savingSearch) return;
+    setSearchError("");
+    setSavingSearch(true);
+    void saveSearch({
+      name,
+      tags: filter.tags,
+      exclude: filter.exclude,
+      q: filter.q,
+      sort: filter.sort,
+      rating: filter.rating,
+    })
+      .then(() => setSearchName(""))
+      .catch((caught) => setSearchError(errorText(caught, "Could not save that search.")))
+      .finally(() => setSavingSearch(false));
+  }
+
+  function deleteSearch(id: Id<"savedSearches">) {
+    setSearchError("");
+    void removeSearch({ id }).catch((caught) => setSearchError(errorText(caught, "Could not remove that search.")));
   }
 
   function addTagsFromText(value: string) {
@@ -203,7 +263,12 @@ export function Board({
                         addInclude(item.tag);
                       }}
                     >
-                      <span className="truncate">{tagLabel(item.tag)}</span>
+                      <span className="flex min-w-0 items-baseline gap-1.5">
+                        <span className="truncate">{tagLabel(item.tag)}</span>
+                        {item.category !== "general" && (
+                          <span className="shrink-0 text-muted-foreground capitalize">{item.category}</span>
+                        )}
+                      </span>
                       <span className="text-muted-foreground tabular-nums">{item.count}</span>
                     </button>
                     <button
@@ -242,7 +307,7 @@ export function Board({
                   setText("");
                   setStagedTags([]);
                   setStagedExclude([]);
-                  commit({ tags: [], exclude: [], q: "", sort: filter.sort, cleared: true }, true);
+                  commit({ tags: [], exclude: [], q: "", sort: filter.sort, rating: "any", cleared: true }, true);
                 }}
                 className="cursor-pointer rounded-[0.45rem] border border-danger px-[0.8rem] py-[0.45rem] text-[0.85rem] font-semibold text-danger hover:bg-[color-mix(in_srgb,var(--danger)_14%,var(--surface))]"
               >
@@ -255,7 +320,14 @@ export function Board({
                 onClick={() => {
                   setText("");
                   commit(
-                    { tags: defaults?.tags ?? [], exclude: defaults?.exclude ?? [], q: "", sort: filter.sort, cleared: false },
+                    {
+                      tags: defaults?.tags ?? [],
+                      exclude: defaults?.exclude ?? [],
+                      q: "",
+                      sort: filter.sort,
+                      rating: filter.rating,
+                      cleared: false,
+                    },
                     true,
                   );
                 }}
@@ -270,15 +342,39 @@ export function Board({
               <span className="bg-surface px-2 py-1.5 text-[0.8rem] text-muted-foreground">Relevant</span>
             ) : (
               <>
-                <SegmentButton active={filter.sort === "newest"} onClick={() => commit({ ...filter, sort: "newest" })}>
+                <SegmentButton active={shownSort === "newest"} onClick={() => commit({ ...filter, sort: "newest" })}>
                   Newest
                 </SegmentButton>
-                <SegmentButton active={filter.sort === "oldest"} onClick={() => commit({ ...filter, sort: "oldest" })}>
+                <SegmentButton active={shownSort === "oldest"} onClick={() => commit({ ...filter, sort: "oldest" })}>
                   Oldest
                 </SegmentButton>
+                {mostSaved && (
+                  <SegmentButton active={shownSort === "saved"} onClick={() => commit({ ...filter, sort: "saved" })}>
+                    Most saved
+                  </SegmentButton>
+                )}
               </>
             )}
           </Segment>
+          {showSensitive && (
+            <Segment label="Rating">
+              <SegmentButton active={filter.rating === "any"} onClick={() => commit({ ...filter, rating: "any" })}>
+                Any
+              </SegmentButton>
+              <SegmentButton active={filter.rating === "safe"} onClick={() => commit({ ...filter, rating: "safe" })}>
+                Safe
+              </SegmentButton>
+              <SegmentButton
+                active={filter.rating === "questionable"}
+                onClick={() => commit({ ...filter, rating: "questionable" })}
+              >
+                Sensitive
+              </SegmentButton>
+              <SegmentButton active={filter.rating === "explicit"} onClick={() => commit({ ...filter, rating: "explicit" })}>
+                Explicit
+              </SegmentButton>
+            </Segment>
+          )}
           <div className="ml-auto flex flex-wrap items-center gap-2 max-[700px]:ml-0">
             <div className="max-[700px]:hidden">
               <Segment label="View mode">
@@ -306,6 +402,50 @@ export function Board({
             </Button>
           </div>
         </div>
+        {signedIn && filterActive(filter) && (
+          <form
+            className="flex w-full max-w-md items-center gap-2 pb-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              storeSearch();
+            }}
+          >
+            <Input
+              value={searchName}
+              onChange={(event) => setSearchName(event.target.value)}
+              placeholder="Name this search"
+              aria-label="Name this search"
+              className="w-auto min-w-0 flex-1 py-[0.45rem] text-[0.85rem]"
+            />
+            <Button type="submit" variant="outline" disabled={savingSearch || searchName.trim() === ""} className="px-3 py-[0.45rem] text-[0.85rem]">
+              Save search
+            </Button>
+          </form>
+        )}
+        {searchError && <p className="m-0 pb-2 text-sm text-danger">{searchError}</p>}
+        {signedIn && savedSearches.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pb-2">
+            {savedSearches.map((search) => (
+              <span key={search._id} className="inline-flex max-w-full items-center rounded-full border border-border-strong bg-surface-soft text-[0.8rem]">
+                <button type="button" className="max-w-48 cursor-pointer truncate px-2.5 py-0.5" onClick={() => applySaved(search)}>
+                  {search.name}
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Remove ${search.name}`}
+                  className="cursor-pointer pr-2 text-muted-foreground"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    deleteSearch(search._id);
+                  }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         {(stagedTags.length > 0 || stagedExclude.length > 0) && (
           <div className="flex flex-wrap gap-1.5 pb-2">
             {stagedTags.map((tag) => (
@@ -403,14 +543,14 @@ export function Board({
       {items.length > 0 && view.mode === "grid" && (
         <div className="grid grid-cols-2 gap-2.5 pt-4 min-[701px]:grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] min-[701px]:gap-4 min-[1601px]:grid-cols-[repeat(auto-fill,minmax(16rem,1fr))]">
           {items.map((post) => (
-            <Picture key={post._id} post={post} href={postHash(post._id, filter, saved)} />
+            <Picture key={post._id} post={post} href={postHash(post._id, filter, saved, authorId)} />
           ))}
         </div>
       )}
       {items.length > 0 && view.mode === "rows" && (
         <div className="grid gap-3 pt-4">
           {items.map((post) => (
-            <PictureRow key={post._id} post={post} href={postHash(post._id, filter, saved)} onTag={addInclude} />
+            <PictureRow key={post._id} post={post} href={postHash(post._id, filter, saved, authorId)} onTag={addInclude} />
           ))}
         </div>
       )}

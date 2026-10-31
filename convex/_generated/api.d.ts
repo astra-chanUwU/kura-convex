@@ -18,9 +18,11 @@ import type * as posts from "../posts.js";
 import type * as preferences from "../preferences.js";
 import type * as records from "../records.js";
 import type * as roles from "../roles.js";
+import type * as savedSearches from "../savedSearches.js";
 import type * as seed from "../seed.js";
 import type * as site from "../site.js";
 import type * as storage from "../storage.js";
+import type * as tags from "../tags.js";
 import type * as validators from "../validators.js";
 
 import type {
@@ -40,9 +42,11 @@ declare const fullApi: ApiFromModules<{
   preferences: typeof preferences;
   records: typeof records;
   roles: typeof roles;
+  savedSearches: typeof savedSearches;
   seed: typeof seed;
   site: typeof site;
   storage: typeof storage;
+  tags: typeof tags;
   validators: typeof validators;
 }>;
 

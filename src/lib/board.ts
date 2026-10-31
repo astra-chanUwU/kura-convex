@@ -1,12 +1,15 @@
 import { normalizeTag } from "../../shared/tags";
 
-export type BoardSort = "newest" | "oldest";
+export type BoardSort = "newest" | "oldest" | "saved";
+
+export type BoardRating = "any" | "safe" | "questionable" | "explicit";
 
 export type BoardFilter = {
   tags: string[];
   exclude: string[];
   q: string;
   sort: BoardSort;
+  rating: BoardRating;
   cleared: boolean;
 };
 
@@ -20,6 +23,7 @@ export const EMPTY_FILTER: BoardFilter = {
   exclude: [],
   q: "",
   sort: "newest",
+  rating: "any",
   cleared: false,
 };
 
@@ -62,17 +66,20 @@ export function parseFilter(params: URLSearchParams): BoardFilter {
   const exclude = [...new Set((params.get("exclude") ?? "").split(",").map(normalizeTagToken).filter(Boolean))].filter(
     (tag) => !tags.includes(tag),
   );
+  const sortParam = params.get("sort");
+  const ratingParam = params.get("rating");
   return {
     tags,
     exclude,
     q: (params.get("q") ?? "").trim(),
-    sort: params.get("sort") === "oldest" ? "oldest" : "newest",
+    sort: sortParam === "oldest" || sortParam === "saved" ? sortParam : "newest",
+    rating: ratingParam === "safe" || ratingParam === "questionable" || ratingParam === "explicit" ? ratingParam : "any",
     cleared: params.get("cleared") === "1",
   };
 }
 
 export function filterActive(filter: BoardFilter) {
-  return filter.tags.length > 0 || filter.exclude.length > 0 || filter.q !== "";
+  return filter.tags.length > 0 || filter.exclude.length > 0 || filter.q !== "" || filter.rating !== "any";
 }
 
 function searchParams(filter: BoardFilter, saved = false) {
@@ -80,7 +87,8 @@ function searchParams(filter: BoardFilter, saved = false) {
   if (filter.tags.length > 0) params.set("tags", filter.tags.join(","));
   if (filter.exclude.length > 0) params.set("exclude", filter.exclude.join(","));
   if (filter.q) params.set("q", filter.q);
-  if (filter.sort === "oldest") params.set("sort", "oldest");
+  if (filter.sort !== "newest") params.set("sort", filter.sort);
+  if (filter.rating !== "any") params.set("rating", filter.rating);
   if (saved) params.set("saved", "1");
   if (filter.cleared && !filterActive(filter)) params.set("cleared", "1");
   return params;
@@ -93,14 +101,23 @@ export function boardHash(saved: boolean, filter: BoardFilter) {
   return `#${path}${query ? `?${query}` : ""}`;
 }
 
-export function postHash(id: string, filter: BoardFilter, saved: boolean) {
+export function userHash(userId: string, filter: BoardFilter) {
+  const query = searchParams(filter).toString();
+  return `#/u/${encodeURIComponent(userId)}${query ? `?${query}` : ""}`;
+}
+
+export function postHash(id: string, filter: BoardFilter, saved: boolean, authorId?: string) {
   const params = searchParams(filter, saved);
+  if (authorId) params.set("author", authorId);
   const query = params.toString();
   return `#/posts/${encodeURIComponent(id)}${query ? `?${query}` : ""}`;
 }
 
-export function writeBoard(saved: boolean, filter: BoardFilter, replace = false) {
-  const hash = boardHash(saved, filter);
+export function writeBoard(saved: boolean, filter: BoardFilter, replace = false, userId?: string) {
+  const query = searchParams(filter).toString();
+  const hash = userId
+    ? `#/u/${encodeURIComponent(userId)}${query ? `?${query}` : ""}`
+    : boardHash(saved, filter);
   if (!replace) {
     window.location.hash = hash;
     return;

@@ -30,6 +30,10 @@ export function canModerate(role: AccountRole | null | undefined) {
   return role === "moderator" || role === "owner";
 }
 
+export function canCurate(role: AccountRole | null | undefined) {
+  return role === "curator" || role === "moderator" || role === "owner";
+}
+
 export function roleLabel(role: AccountRole | null | undefined) {
   switch (role) {
     case "owner":

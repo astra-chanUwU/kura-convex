@@ -73,49 +73,101 @@ export const prepareUpload = action({
   },
 });
 
+const uploadFields = {
+  storageKey: v.string(),
+  contentType: v.string(),
+  byteSize: v.number(),
+  width: v.number(),
+  height: v.number(),
+  originalName: v.string(),
+  artist: v.string(),
+  source: v.string(),
+  caption: v.string(),
+  rating,
+  tags: v.array(v.string()),
+  thumbKey: v.optional(v.string()),
+  sha256: v.string(),
+};
+
+async function assertUpload(args: {
+  sha256: string;
+  contentType: string;
+  storageKey: string;
+  byteSize: number;
+  thumbKey?: string;
+}) {
+  if (!/^[a-f0-9]{64}$/.test(args.sha256)) {
+    throw new ConvexError("That file hash is not a SHA-256.");
+  }
+  if (!TYPES[args.contentType] || !uploadKey.test(args.storageKey)) {
+    throw new ConvexError("That upload is not a picture we signed.");
+  }
+  if (args.thumbKey !== undefined && args.thumbKey !== thumbKeyFor(args.storageKey)) {
+    throw new ConvexError("That upload is not a picture we signed.");
+  }
+  const stored = client(env("KURA_S3_ENDPOINT", "http://minio:9000"));
+  const head = await stored.send(new HeadObjectCommand({ Bucket: bucket(), Key: args.storageKey }));
+  if (head.ContentLength !== args.byteSize || args.byteSize > MAX_BYTES) {
+    throw new ConvexError("The upload size does not match the file.");
+  }
+  if (args.thumbKey) {
+    const thumb = await stored.send(new HeadObjectCommand({ Bucket: bucket(), Key: args.thumbKey }));
+    if (!thumb.ContentLength || thumb.ContentLength > MAX_THUMB_BYTES) {
+      throw new ConvexError("The thumbnail did not land in storage.");
+    }
+  }
+}
+
 export const publish = action({
+  args: uploadFields,
+  returns: v.object({
+    postId: v.id("posts"),
+    duplicateOf: v.union(v.id("posts"), v.null()),
+  }),
+  handler: async (ctx, args): Promise<{ postId: Id<"posts">; duplicateOf: Id<"posts"> | null }> => {
+    const userId = await requirePoster(ctx);
+    await assertUpload(args);
+    const inserted = await ctx.runMutation(internal.posts.insertUploaded, {
+      ...args,
+      authorId: userId,
+    });
+    if (inserted.duplicate) return { postId: inserted.id, duplicateOf: inserted.id };
+    if (!args.thumbKey) {
+      await ctx.scheduler.runAfter(0, internal.storage.ensureThumb, { postId: inserted.id, attempt: 0 });
+    }
+    return { postId: inserted.id, duplicateOf: null };
+  },
+});
+
+export const discardUpload = action({
+  args: { storageKey: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args): Promise<null> => {
+    await requirePoster(ctx);
+    const owner = await ctx.runQuery(internal.posts.storageKeyOwner, { storageKey: args.storageKey });
+    if (owner) return null;
+    await ctx.scheduler.runAfter(0, internal.storage.deleteStored, { keys: [args.storageKey] });
+    return null;
+  },
+});
+
+export const keepAsChild = action({
   args: {
-    storageKey: v.string(),
-    contentType: v.string(),
-    byteSize: v.number(),
-    width: v.number(),
-    height: v.number(),
-    originalName: v.string(),
-    artist: v.string(),
-    source: v.string(),
-    caption: v.string(),
-    rating,
-    tags: v.array(v.string()),
-    thumbKey: v.optional(v.string()),
+    ...uploadFields,
+    parentId: v.id("posts"),
   },
   returns: v.id("posts"),
   handler: async (ctx, args): Promise<Id<"posts">> => {
     const userId = await requirePoster(ctx);
-    if (!TYPES[args.contentType] || !uploadKey.test(args.storageKey)) {
-      throw new ConvexError("That upload is not a picture we signed.");
-    }
-    if (args.thumbKey !== undefined && args.thumbKey !== thumbKeyFor(args.storageKey)) {
-      throw new ConvexError("That upload is not a picture we signed.");
-    }
-    const stored = client(env("KURA_S3_ENDPOINT", "http://minio:9000"));
-    const head = await stored.send(new HeadObjectCommand({ Bucket: bucket(), Key: args.storageKey }));
-    if (head.ContentLength !== args.byteSize || args.byteSize > MAX_BYTES) {
-      throw new ConvexError("The upload size does not match the file.");
-    }
-    if (args.thumbKey) {
-      const thumb = await stored.send(new HeadObjectCommand({ Bucket: bucket(), Key: args.thumbKey }));
-      if (!thumb.ContentLength || thumb.ContentLength > MAX_THUMB_BYTES) {
-        throw new ConvexError("The thumbnail did not land in storage.");
-      }
-    }
-    const id = await ctx.runMutation(internal.posts.insertUploaded, {
+    await assertUpload(args);
+    const inserted = await ctx.runMutation(internal.posts.insertUploaded, {
       ...args,
       authorId: userId,
     });
-    if (!args.thumbKey) {
-      await ctx.scheduler.runAfter(0, internal.storage.ensureThumb, { postId: id, attempt: 0 });
+    if (!inserted.duplicate && !args.thumbKey) {
+      await ctx.scheduler.runAfter(0, internal.storage.ensureThumb, { postId: inserted.id, attempt: 0 });
     }
-    return id;
+    return inserted.id;
   },
 });
 

@@ -17,6 +17,7 @@ import {
   filterActive,
   parseFilter,
   readBoardView,
+  userHash,
   writeBoard,
   writeBoardView,
   type BoardFilter,
@@ -25,13 +26,15 @@ import {
 import { HistoryPage } from "@/components/HistoryPage";
 import { PostHistory } from "@/components/PostHistory";
 import { PostModeration } from "@/components/PostModeration";
+import { UploaderHeader } from "@/components/UploaderPage";
 import { errorText } from "@/lib/errors";
 import { canModerate, canUpload } from "../shared/roles";
 import { cn } from "@/lib/utils";
 
 type Route =
   | { name: "board"; saved: boolean; filter: BoardFilter }
-  | { name: "post"; id: string; saved: boolean; filter: BoardFilter }
+  | { name: "post"; id: string; saved: boolean; filter: BoardFilter; authorId?: string }
+  | { name: "user"; userId: string; filter: BoardFilter }
   | { name: "preferences" }
   | { name: "history" }
   | { name: "auth"; mode: "sign-in" | "sign-up" }
@@ -44,7 +47,14 @@ function parseHash(hash: string): Route {
   const filter = parseFilter(params);
   const saved = path.startsWith("/saved") || params.get("saved") === "1";
   if (path.startsWith("/posts/")) {
-    return { name: "post", id: decodeURIComponent(path.slice("/posts/".length)), saved, filter };
+    const author = params.get("author") ?? "";
+    return {
+      name: "post",
+      id: decodeURIComponent(path.slice("/posts/".length)),
+      saved,
+      filter,
+      ...(author ? { authorId: decodeURIComponent(author) } : {}),
+    };
   }
   if (path.startsWith("/preferences")) return { name: "preferences" };
   if (path.startsWith("/history")) return { name: "history" };
@@ -52,7 +62,14 @@ function parseHash(hash: string): Route {
   if (path.startsWith("/auth")) {
     return { name: "auth", mode: params.get("mode") === "sign-up" ? "sign-up" : "sign-in" };
   }
+  if (path.startsWith("/u/")) {
+    return { name: "user", userId: decodeURIComponent(path.slice("/u/".length)), filter };
+  }
   return { name: "board", saved: path.startsWith("/saved"), filter };
+}
+
+function boardKey(saved: boolean, filter: BoardFilter, authorId = "") {
+  return `${saved}:${authorId}:${filter.tags.join(",")}:${filter.exclude.join(",")}:${filter.q}:${filter.sort}:${filter.rating}`;
 }
 
 function navClass(active: boolean) {
@@ -106,7 +123,7 @@ function Kura() {
   }, []);
 
   useEffect(() => {
-    if (route.name !== "board") setUploadNote("");
+    if (route.name !== "board" && route.name !== "user") setUploadNote("");
   }, [route]);
 
   useEffect(() => {
@@ -117,9 +134,20 @@ function Kura() {
   }, [route, prefs]);
 
   const name = account?.name || prefs?.displayName || "Account";
-  const onBoard = route.name === "board";
   const boardSaved = route.name === "board" ? route.saved : route.name === "post" ? route.saved : false;
-  const wideBoard = onBoard && view.wide;
+  const wideBoard = (route.name === "board" || route.name === "user") && view.wide;
+  function startUpload() {
+    if (!signedIn) {
+      window.location.hash = "#/auth";
+      return;
+    }
+    if (!canUpload(prefs?.role)) {
+      setUploadNote("Adding a picture needs a contributor account.");
+      return;
+    }
+    setUploadNote("");
+    setUpload(true);
+  }
 
   return (
     <div className="min-h-dvh">
@@ -190,34 +218,49 @@ function Kura() {
       >
         {route.name === "board" && (
           <Board
-            key={`${route.saved}:${route.filter.tags.join(",")}:${route.filter.exclude.join(",")}:${route.filter.q}:${route.filter.sort}`}
+            key={boardKey(route.saved, route.filter)}
             filter={route.filter}
             saved={route.saved}
-            defaults={
-              prefs?.signedIn ? { tags: prefs.includeTags, exclude: prefs.excludeTags } : null
-            }
+            showSensitive={prefs?.showSensitive === true}
+            defaults={prefs?.signedIn ? { tags: prefs.includeTags, exclude: prefs.excludeTags } : null}
             view={view}
             onView={(next) => {
               setView(next);
               writeBoardView(next);
             }}
-            onUpload={() => {
-              if (!signedIn) {
-                window.location.hash = "#/auth";
-                return;
-              }
-              if (!canUpload(prefs?.role)) {
-                setUploadNote("Adding a picture needs a contributor account.");
-                return;
-              }
-              setUploadNote("");
-              setUpload(true);
-            }}
+            onUpload={startUpload}
+            signedIn={signedIn}
           />
+        )}
+        {route.name === "user" && (
+          <>
+            <UploaderHeader userId={route.userId} />
+            <Board
+              key={boardKey(false, route.filter, route.userId)}
+              filter={route.filter}
+              saved={false}
+              authorId={route.userId}
+              showSensitive={prefs?.showSensitive === true}
+              defaults={prefs?.signedIn ? { tags: prefs.includeTags, exclude: prefs.excludeTags } : null}
+              view={view}
+              onView={(next) => {
+                setView(next);
+                writeBoardView(next);
+              }}
+              onUpload={startUpload}
+              signedIn={signedIn}
+            />
+          </>
         )}
         {route.name === "post" && (
           <>
-            <PostView id={route.id} back={boardHash(route.saved, route.filter)} />
+            <PostView
+              id={route.id}
+              back={route.authorId ? userHash(route.authorId, route.filter) : boardHash(route.saved, route.filter)}
+              filter={route.filter}
+              saved={route.saved}
+              authorId={route.authorId}
+            />
             <PostModeration id={route.id} back={boardHash(route.saved, route.filter)} />
             <PostHistory postId={route.id} />
           </>

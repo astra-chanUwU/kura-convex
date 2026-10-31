@@ -4,7 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { requireUserId, roleFor } from "./authz";
-import { clipSource, clipText, replaceTags, searchTextFor } from "./records";
+import { clipSource, clipText, markArtistCategory, replaceTags, resolveTags, searchTextFor } from "./records";
 import { changeAction, normalizeTags, postSnapshot } from "./validators";
 
 type Rating = "safe" | "questionable" | "explicit";
@@ -64,7 +64,7 @@ export async function applyPostSnapshot(ctx: MutationCtx, post: Doc<"posts">, sn
   const artist = clipText(snapshot.artist, 80);
   const caption = clipText(snapshot.caption, 500);
   const source = clipSource(snapshot.source);
-  const tags = normalizeTags(snapshot.tags, 40);
+  const tags = await resolveTags(ctx, normalizeTags(snapshot.tags, 40));
   const next: PostSnapshot = {
     artist,
     caption,
@@ -83,6 +83,7 @@ export async function applyPostSnapshot(ctx: MutationCtx, post: Doc<"posts">, sn
     removedAt: snapshot.removed ? (post.removedAt ?? Date.now()) : undefined,
   });
   await replaceTags(ctx, post._id, tags, post.createdAt);
+  await markArtistCategory(ctx, artist, tags);
   return next;
 }
 

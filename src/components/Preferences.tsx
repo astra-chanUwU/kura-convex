@@ -7,7 +7,7 @@ import { Input, Label, Textarea } from "@/components/ui/input";
 import { AccountSecurity } from "@/components/AccountSecurity";
 import { errorText } from "@/lib/errors";
 import { FONT_LABELS, THEME_LABELS, type FontId, type ThemeId } from "@/lib/appearance";
-import { roleLabel } from "../../shared/roles";
+import { accountRoles, roleLabel, type AccountRole } from "../../shared/roles";
 
 export function Preferences({
   theme,
@@ -46,9 +46,66 @@ export function Preferences({
         Saved on your account. Default tags fill an empty board, and My defaults on the board jumps back to them.
       </p>
       <PreferencesForm prefs={prefs} theme={theme} font={font} />
+      {prefs.role === "owner" && <Accounts />}
       <AppearanceSample theme={theme} font={font} onAppearance={onAppearance} />
       <AccountSecurity />
     </section>
+  );
+}
+
+function asRole(value: string): AccountRole | null {
+  return accountRoles.find((role) => role === value) ?? null;
+}
+
+function Accounts() {
+  const accounts = useQuery(api.preferences.listAccounts);
+  if (accounts === undefined) return <p className="m-0 text-sm text-muted-foreground">Loading accounts…</p>;
+  return (
+    <div className="grid max-w-[36rem] gap-3">
+      <h2 className="m-0 text-base font-semibold">Accounts</h2>
+      <ul className="m-0 grid list-none gap-2 p-0">
+        {accounts.map((account) => (
+          <AccountRow key={account.userId} account={account} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function AccountRow({ account }: { account: { userId: string; displayName: string; role: AccountRole } }) {
+  const setRole = useMutation(api.preferences.setRole);
+  const [chosen, setChosen] = useState<AccountRole | null>(null);
+  const [error, setError] = useState("");
+  if (chosen !== null && account.role === chosen) setChosen(null);
+  const role = chosen ?? account.role;
+  return (
+    <li className="grid gap-1">
+      <div className="flex items-center justify-between gap-3">
+        <span className="min-w-0 truncate text-sm">{account.displayName}</span>
+        <select
+          aria-label={`Role for ${account.displayName}`}
+          value={role}
+          onChange={(event) => {
+            const next = asRole(event.target.value);
+            if (!next || next === role) return;
+            setChosen(next);
+            setError("");
+            void setRole({ userId: account.userId, role: next }).catch((caught) => {
+              setChosen(null);
+              setError(errorText(caught, "Could not change that role."));
+            });
+          }}
+          className="cursor-pointer rounded-[0.4rem] border border-border-strong bg-surface px-2 py-[0.4rem] text-[0.85rem] text-foreground"
+        >
+          {accountRoles.map((option) => (
+            <option key={option} value={option}>
+              {roleLabel(option)}
+            </option>
+          ))}
+        </select>
+      </div>
+      {error && <p className="m-0 text-sm text-danger">{error}</p>}
+    </li>
   );
 }
 

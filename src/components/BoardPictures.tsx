@@ -21,22 +21,30 @@ export type ListedPost = {
   tags: string[];
   createdAt: number;
   favorite: boolean;
+  favoriteCount: number;
   rating: "safe" | "questionable" | "explicit";
 };
 
-function thumbSrc(post: ListedPost) {
-  return imageUrl(post.thumbKey ?? post.storageKey);
+function Thumb({ post, alt, className }: { post: ListedPost; alt: string; className: string }) {
+  const [original, setOriginal] = useState(false);
+  const key = !original && post.thumbKey ? post.thumbKey : post.storageKey;
+  return (
+    <img
+      src={imageUrl(key)}
+      alt={alt}
+      className={className}
+      loading="lazy"
+      onError={() => {
+        if (!original && post.thumbKey) setOriginal(true);
+      }}
+    />
+  );
 }
 
 export function Picture({ post, href }: { post: ListedPost; href: string }) {
   return (
     <a href={href} className="relative block overflow-hidden rounded-xl border border-border bg-surface-soft">
-      <img
-        src={thumbSrc(post)}
-        alt={post.caption || post.artist || "Picture"}
-        className="aspect-[4/3] w-full object-cover"
-        loading="lazy"
-      />
+      <Thumb post={post} alt={post.caption || post.artist || "Picture"} className="aspect-[4/3] w-full object-cover" />
       <SaveButton post={post} />
       {post.rating !== "safe" && <RatingBadge rating={post.rating} />}
     </a>
@@ -47,7 +55,7 @@ export function PictureRow({ post, href, onTag }: { post: ListedPost; href: stri
   return (
     <article className="flex min-w-0 gap-4 rounded-[0.6rem] border border-border bg-surface p-3 max-[640px]:flex-col">
       <a href={href} className="block w-60 shrink-0 overflow-hidden rounded-md bg-surface-soft max-[640px]:w-full" aria-label="Open post">
-        <img src={thumbSrc(post)} alt="" className="h-[10.5rem] w-full object-cover max-[640px]:h-52" loading="lazy" />
+        <Thumb post={post} alt="" className="h-[10.5rem] w-full object-cover max-[640px]:h-52" />
       </a>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-start justify-between gap-3">
@@ -57,7 +65,7 @@ export function PictureRow({ post, href, onTag }: { post: ListedPost; href: stri
         <p className="m-0 text-sm text-muted-foreground">
           <span className={post.rating === "safe" ? "font-bold" : "font-bold text-danger"}>{post.rating.toUpperCase()}</span>
           {" · "}
-          {post.width}×{post.height} · {formatBytes(post.byteSize)}
+          {post.width}×{post.height} · {formatBytes(post.byteSize)} · {post.favoriteCount} saves
         </p>
         {post.tags.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1.5">

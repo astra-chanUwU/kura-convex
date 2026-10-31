@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { fontIds, storedThemeIds, themeIds } from "../shared/appearance";
+import { tagCategories } from "../shared/tags";
 
 export { normalizeFont, normalizeTheme } from "../shared/appearance";
 export { normalizeTag, normalizeTags } from "../shared/tags";
@@ -18,6 +19,24 @@ function unionOf<const T extends readonly [string, string, ...string[]]>(ids: T)
 export const theme = unionOf(themeIds);
 export const font = unionOf(fontIds);
 export const storedTheme = unionOf(storedThemeIds);
+const [general, artist, copyright, character, meta] = tagCategories;
+export const tagCategory = v.union(
+  v.literal(general),
+  v.literal(artist),
+  v.literal(copyright),
+  v.literal(character),
+  v.literal(meta),
+);
+
+export const savedSort = v.union(v.literal("newest"), v.literal("oldest"), v.literal("saved"));
+
+export const savedRating = v.union(
+  v.literal("any"),
+  v.literal("safe"),
+  v.literal("questionable"),
+  v.literal("explicit"),
+);
+
 export const accountRole = v.union(
   v.literal("owner"),
   v.literal("moderator"),
@@ -42,6 +61,7 @@ export const postCard = v.object({
   tags: v.array(v.string()),
   safebooruId: v.union(v.number(), v.null()),
   favorite: v.boolean(),
+  favoriteCount: v.number(),
 });
 
 export const changeAction = v.union(
@@ -77,16 +97,21 @@ export const postDetail = v.object({
   tags: v.array(v.string()),
   safebooruId: v.union(v.number(), v.null()),
   favorite: v.boolean(),
+  favoriteCount: v.number(),
   mine: v.boolean(),
   canRemove: v.boolean(),
   canEdit: v.boolean(),
   removed: v.boolean(),
   authorName: v.union(v.string(), v.null()),
+  authorId: v.string(),
+  sourceBoard: v.union(v.string(), v.null()),
+  sourceId: v.union(v.number(), v.null()),
 });
 
 export const tagCount = v.object({
   tag: v.string(),
   count: v.number(),
+  category: tagCategory,
 });
 
 export const preferenceResult = v.object({

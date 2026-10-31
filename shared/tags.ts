@@ -1,3 +1,7 @@
+export const tagCategories = ["general", "artist", "copyright", "character", "meta"] as const;
+
+export type TagCategory = (typeof tagCategories)[number];
+
 export function normalizeTag(raw: string) {
   return raw
     .trim()
@@ -17,4 +21,10 @@ export function normalizeTags(tags: string[], max = 20) {
     if (out.length >= max) break;
   }
   return out;
+}
+
+export function withArtistTag(tags: string[], artist: string, max = 40) {
+  const artistTag = normalizeTag(artist);
+  if (!artistTag) return tags;
+  return normalizeTags([...tags, artistTag], max);
 }

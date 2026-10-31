@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, realpathSync, readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -175,6 +176,7 @@ async function download(s3, post) {
     let byteSize = existing?.ContentLength ?? 0;
     let type = existing?.ContentType || contentType(post.ext);
     let key = storageKey;
+    let sha256;
     if (!byteSize) {
       const response = await fetch(post.url, { headers: { "user-agent": "kura-convex-seed/0.1" } });
       if (!response.ok) return null;
@@ -184,16 +186,17 @@ async function download(s3, post) {
       key = `images/${post.board}/${post.id}.${ext}`;
       type = contentType(ext);
       byteSize = bytes.length;
+      sha256 = createHash("sha256").update(bytes).digest("hex");
       await s3.send(new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: bytes, ContentType: type }));
     }
-    return finish(post, key, byteSize, type);
+    return finish(post, key, byteSize, type, sha256);
   } catch (error) {
     console.error(`Skip ${post.board} ${post.id}: ${error instanceof Error ? error.message : error}`);
     return null;
   }
 }
 
-function finish(post, storageKey, byteSize, type) {
+function finish(post, storageKey, byteSize, type, sha256) {
   return {
     sourceBoard: post.board,
     sourceId: post.id,
@@ -210,6 +213,7 @@ function finish(post, storageKey, byteSize, type) {
     rating: post.rating,
     createdAt: post.createdAt,
     tags: post.tags,
+    ...(sha256 ? { sha256 } : {}),
   };
 }
 

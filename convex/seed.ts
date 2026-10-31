@@ -1,8 +1,9 @@
 import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
+import { withArtistTag } from "../shared/tags";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { searchTextFor, writeTags } from "./records";
+import { markArtistCategory, resolveTags, searchTextFor, writeTags } from "./records";
 import { font, normalizeTags, rating, theme } from "./validators";
 
 const importAuthors = new Set(["safebooru", "danbooru", "gelbooru", "konachan", "yandere"]);
@@ -24,6 +25,7 @@ const postValidator = v.object({
   rating,
   createdAt: v.number(),
   tags: v.array(v.string()),
+  sha256: v.optional(v.string()),
 });
 
 export const existingSafebooruIds = internalQuery({
@@ -71,7 +73,15 @@ export const importBatch = internalMutation({
           .unique();
         if (legacy) continue;
       }
-      const tags = normalizeTags(post.tags, 40);
+      const sha256 = post.sha256;
+      if (sha256) {
+        const hashed = await ctx.db
+          .query("posts")
+          .withIndex("by_sha256", (q) => q.eq("sha256", sha256))
+          .unique();
+        if (hashed) continue;
+      }
+      const tags = await resolveTags(ctx, withArtistTag(normalizeTags(post.tags, 40), post.artist));
       const fields = {
         storageKey: post.storageKey,
         thumbKey: post.thumbKey,
@@ -89,10 +99,13 @@ export const importBatch = internalMutation({
         ...(post.sourceBoard === "safebooru" ? { safebooruId: post.sourceId } : {}),
         sourceBoard: post.sourceBoard,
         sourceId: post.sourceId,
+        ...(post.sha256 ? { sha256: post.sha256 } : {}),
+        favoriteCount: 0,
         tags,
       };
       const id = await ctx.db.insert("posts", { ...fields, searchText: searchTextFor(fields) });
       await writeTags(ctx, id, tags, post.createdAt);
+      await markArtistCategory(ctx, post.artist, tags);
       if (!post.thumbKey) {
         await ctx.scheduler.runAfter(0, internal.storage.ensureThumb, { postId: id, attempt: 0 });
       }
@@ -201,6 +214,7 @@ export const saveProfile = internalMutation({
       const post = await ctx.db.get(postId);
       if (!post) continue;
       await ctx.db.insert("favorites", { userId: args.userId, postId, createdAt: post.createdAt });
+      await ctx.db.patch(postId, { favoriteCount: (post.favoriteCount ?? 0) + 1 });
     }
     return null;
   },

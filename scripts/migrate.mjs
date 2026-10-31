@@ -26,6 +26,17 @@ for (;;) {
 console.log(`\nSearch text and tag order are filled.`);
 
 cursor = null;
+let saves = 0;
+for (;;) {
+  const page = await convex.mutation(anyApi.maintenance.backfillFavoriteCounts, { cursor });
+  saves += page.updated;
+  process.stdout.write(`\rFavorite counts ${saves}`);
+  if (page.isDone) break;
+  cursor = page.cursor;
+}
+console.log(`\nFavorite counts are filled.`);
+
+cursor = null;
 let thumbs = 0;
 for (;;) {
   const page = await convex.query(anyApi.maintenance.postsMissingThumbs, { cursor });

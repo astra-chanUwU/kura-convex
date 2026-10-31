@@ -1,7 +1,8 @@
 import { ConvexError, v } from "convex/values";
 import { thumbKeyFor } from "../shared/storage";
+import { normalizeTag } from "../shared/tags";
 import { internalMutation, internalQuery } from "./_generated/server";
-import { searchTextFor } from "./records";
+import { bumpTag, searchTextFor } from "./records";
 
 export const backfill = internalMutation({
   args: { cursor: v.union(v.string(), v.null()) },
@@ -14,22 +15,28 @@ export const backfill = internalMutation({
     const result = await ctx.db.query("posts").paginate({ numItems: 8, cursor: args.cursor });
     let updated = 0;
     for (const post of result.page) {
-      const searchText = searchTextFor(post);
-      if (post.searchText !== searchText) {
-        await ctx.db.patch(post._id, { searchText });
-        updated += 1;
-      }
       const links = await ctx.db
         .query("postTags")
         .withIndex("by_post", (q) => q.eq("postId", post._id))
         .take(80);
       const have = new Set(links.map((link) => link.tag));
+      let tags = post.tags;
+      const artistTag = normalizeTag(post.artist);
+      if (artistTag && !tags.includes(artistTag) && tags.length < 40) {
+        tags = [...tags, artistTag];
+        if (!have.has(artistTag)) await bumpTag(ctx, artistTag, 1);
+      }
+      const searchText = searchTextFor({ ...post, tags });
+      if (tags !== post.tags || post.searchText !== searchText) {
+        await ctx.db.patch(post._id, tags !== post.tags ? { tags, searchText } : { searchText });
+        updated += 1;
+      }
       for (const link of links) {
         if (link.createdAt === post.createdAt) continue;
         await ctx.db.patch(link._id, { createdAt: post.createdAt });
         updated += 1;
       }
-      for (const tag of post.tags) {
+      for (const tag of tags) {
         if (have.has(tag)) continue;
         await ctx.db.insert("postTags", { postId: post._id, tag, createdAt: post.createdAt });
         updated += 1;
@@ -41,6 +48,37 @@ export const backfill = internalMutation({
       for (const fav of favs) {
         if (fav.createdAt === post.createdAt) continue;
         await ctx.db.patch(fav._id, { createdAt: post.createdAt });
+        updated += 1;
+      }
+    }
+    return { cursor: result.continueCursor, isDone: result.isDone, updated };
+  },
+});
+
+export const backfillFavoriteCounts = internalMutation({
+  args: { cursor: v.union(v.string(), v.null()) },
+  returns: v.object({
+    cursor: v.string(),
+    isDone: v.boolean(),
+    updated: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const result = await ctx.db.query("posts").paginate({ numItems: 8, cursor: args.cursor });
+    let updated = 0;
+    for (const post of result.page) {
+      let count = 0;
+      let favCursor: string | null = null;
+      for (;;) {
+        const favs = await ctx.db
+          .query("favorites")
+          .withIndex("by_post", (q) => q.eq("postId", post._id))
+          .paginate({ numItems: 100, cursor: favCursor });
+        count += favs.page.length;
+        if (favs.isDone) break;
+        favCursor = favs.continueCursor;
+      }
+      if (post.favoriteCount !== count) {
+        await ctx.db.patch(post._id, { favoriteCount: count });
         updated += 1;
       }
     }
